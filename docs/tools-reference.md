@@ -23,7 +23,6 @@ Creates or updates a note (upsert behavior).
 - If it exists (matched by slug): updates it, preserving the `created` date
 - Auto-generates the slug from the title (kebab-case, no accents)
 - Creates the category folder automatically if it doesn't exist
-- Regenerates INDEX.md after writing
 - Warns about broken wikilinks (links to non-existent notes)
 
 **Example:**
@@ -50,7 +49,7 @@ Reads the full content of a note, including backlinks.
 
 **Notes:**
 - Searches across all categories automatically
-- `HOME` and `INDEX` are reserved names — they read from the vault root
+- `HOME` is a reserved name — it reads `HOME.md` from the vault root
 - Returns the note content plus a backlinks section at the bottom
 
 ---
@@ -101,7 +100,7 @@ Returns the full vault index with note counts and backlinks per note.
 
 **No parameters.**
 
-Always regenerates the index before returning it — the data is always fresh.
+The index is built in memory each time the tool is called and returned directly — it is never written to disk. The data is always fresh.
 
 ---
 
@@ -117,7 +116,6 @@ Deletes a note permanently.
 
 **Behavior:**
 - Warns if other notes reference the deleted note via wikilinks
-- Regenerates INDEX.md after deletion
 - The deletion warning does NOT block the operation — it just informs you
 
 ---

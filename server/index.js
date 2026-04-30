@@ -31,7 +31,7 @@ const MEMORY_ROOT = process.env.MEMORY_PATH
     );
 
 // Reserved files — not treated as regular notes
-const RESERVED = new Set(['INDEX.md', 'HOME.md']);
+const RESERVED = new Set(['HOME.md']);
 
 // ─── Utilities ─────────────────────────────────────────────────────────────
 
@@ -176,8 +176,9 @@ function getBacklinks(targetName, allNotes) {
     .map((note) => note.name);
 }
 
-// Regenerates INDEX.md
-function regenerateIndex(allNotes) {
+// Builds the vault index in memory and returns it as a string.
+// The index is no longer persisted to disk — it is regenerated on demand by get_index.
+function buildIndex(allNotes) {
   const byCategory = {};
   for (const note of allNotes) {
     const cat = note.category || 'uncategorized';
@@ -206,13 +207,13 @@ function regenerateIndex(allNotes) {
     index += '\n';
   }
 
-  fs.writeFileSync(path.join(MEMORY_ROOT, 'INDEX.md'), index, 'utf8');
+  return index;
 }
 
 // ─── MCP Server ────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'simple-memory-claude', version: '1.1.1' },
+  { name: 'simple-memory-claude', version: '1.1.2' },
   { capabilities: { tools: {} } }
 );
 
@@ -375,16 +376,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const fullContent = `${frontmatter}\n# ${args.title}\n\n${args.content}\n`;
       fs.writeFileSync(filePath, fullContent, 'utf8');
 
-      const RESERVED_LINKS = new Set(['HOME', 'INDEX', 'home', 'index']);
-      const allNotes = getAllNotes();
+      const RESERVED_LINKS = new Set(['HOME', 'home']);
       const wikilinks = [...stripCode(fullContent).matchAll(/\[\[([^\]]+)\]\]/g)].map(
         (m) => m[1]
       );
       const broken = wikilinks.filter(
         (link) => !RESERVED_LINKS.has(link) && !findNote(link)
       );
-
-      regenerateIndex(allNotes);
 
       let msg = `Note "${args.title}" ${exists ? 'updated' : 'created'} → ${args.category}/${slug}.md`;
       if (broken.length) {
@@ -396,7 +394,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── read_note ─────────────────────────────────────────────────────────
     if (name === 'read_note') {
-      const reservedNames = { HOME: 'HOME.md', INDEX: 'INDEX.md' };
+      const reservedNames = { HOME: 'HOME.md' };
       const reservedFile = reservedNames[args.name.toUpperCase()];
       const filePath = reservedFile
         ? path.join(MEMORY_ROOT, reservedFile)
@@ -529,7 +527,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const backlinks = getBacklinks(args.name, allNotes);
 
       fs.unlinkSync(filePath);
-      regenerateIndex(getAllNotes());
 
       let msg = `Note "${args.name}" deleted.`;
       if (backlinks.length) {
@@ -542,8 +539,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── get_index ─────────────────────────────────────────────────────────
     if (name === 'get_index') {
       const allNotes = getAllNotes();
-      regenerateIndex(allNotes);
-      const content = fs.readFileSync(path.join(MEMORY_ROOT, 'INDEX.md'), 'utf8');
+      const content = buildIndex(allNotes);
       return { content: [{ type: 'text', text: content }] };
     }
 
@@ -626,8 +622,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
       }
-
-      regenerateIndex(getAllNotes());
 
       let msg = `Note moved/renamed:\n- Before: ${path.relative(MEMORY_ROOT, srcPath)}\n- After:  ${newCategory}/${newSlug}.md`;
       if (oldSlug !== newSlug) {

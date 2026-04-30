@@ -152,7 +152,6 @@ Restart Claude Code and ask Claude to run `get_index`. You should see your vault
 ```
 my-memory/
 ├── HOME.md                         ← read at the start of every session
-├── INDEX.md                        ← auto-generated, do not edit manually
 ├── clients/
 │   └── client-name/
 │       └── profile.md
@@ -234,6 +233,13 @@ Created by **José Manuel Pérez**, founder of [santa marta crea](https://santam
 
 - Web: [santamartacrea.com](https://santamartacrea.com)
 - GitHub: [@jmpdsevilla](https://github.com/jmpdsevilla)
+
+---
+
+## Historial de cambios / Changelog
+
+Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 ---
 

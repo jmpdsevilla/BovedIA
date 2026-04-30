@@ -38,4 +38,4 @@ Read this at the start of each session to orient yourself.
 
 ## See also
 
-- [[INDEX]] — full index of all notes
+Use `get_index` to view the full index of all notes (regenerated on demand).
