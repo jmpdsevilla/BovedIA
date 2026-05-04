@@ -213,7 +213,7 @@ function buildIndex(allNotes) {
 // ─── MCP Server ────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'simple-memory-claude', version: '1.1.2' },
+  { name: 'simple-memory-claude', version: '1.1.4' },
   { capabilities: { tools: {} } }
 );
 
@@ -222,7 +222,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'write_note',
       description:
-        'Create or update a note in the knowledge base (upsert). Use "name" to update an existing note when the title differs from the current filename.',
+        'Create, save, store, add or update a note in the knowledge base (upsert). Write operation — use it whenever you want to persist new content or overwrite an existing note, including notes deposited by external assistants in their inbox folder. If the note already exists, it is updated. Use "name" to update an existing note when the title differs from the current filename.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -233,7 +233,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           category: {
             type: 'string',
-            description: 'Subfolder where the note will be saved (e.g. clients, stack, projects, references)',
+            description: 'Subfolder where the note will be saved (e.g. clients, stack, projects, references). External assistants can use a dedicated inbox subfolder agreed with the human (e.g. "inbox-claude-ai") so that another agent can later move notes to their definitive category.',
           },
           tags: {
             type: 'array',
@@ -304,7 +304,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'create_category',
-      description: 'Create a new subcategory/folder in the knowledge base.',
+      description: 'Create a new subcategory or folder in the knowledge base. Use it before saving the first note in a category that does not yet exist.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -316,7 +316,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'move_note',
       description:
-        'Move a note to another category and/or rename it. Automatically updates wikilinks in all other notes.',
+        'Move, rename or relocate a note — change its category and/or change its title. Automatically updates wikilinks in all other notes that reference it.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -329,7 +329,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'delete_category',
-      description: 'Delete an empty category. Fails if the folder still contains notes.',
+      description: 'Delete or remove an empty category/subfolder. Only works if the folder no longer contains notes.',
       inputSchema: {
         type: 'object',
         properties: {

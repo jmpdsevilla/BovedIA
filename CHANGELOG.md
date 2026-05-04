@@ -8,6 +8,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and versionin
 
 ---
 
+## [1.1.4] — 2026-05-04
+
+### Changed
+
+**[ES]**
+- Ampliadas las descripciones de las cuatro herramientas de escritura (`write_note`, `move_note`, `create_category`, `delete_category`) con más verbos de acción para que el ranker de relevancia de los clientes MCP las priorice ante consultas en lenguaje natural. Antes, herramientas como `tool_search("save note inbox")` podían dejar fuera `write_note` por debajo de las herramientas de lectura, obligando al asistente a pasar por una sintaxis de selección explícita por nombre.
+- La descripción del campo `category` de `write_note` ahora menciona explícitamente la convención de carpeta de bandeja para asistentes externos (un agente deposita y otro mueve a su categoría definitiva).
+
+**[EN]**
+- Expanded the descriptions of the four write tools (`write_note`, `move_note`, `create_category`, `delete_category`) with more action verbs so that the MCP client's relevance ranker prioritises them on natural-language queries. Previously, queries like `tool_search("save note inbox")` could leave `write_note` outside the top results behind the read tools, forcing the assistant to fall back on explicit selection by name.
+- The `category` field description of `write_note` now explicitly mentions the inbox-folder convention for external assistants (one agent drops the note, another moves it to its definitive category).
+
+### Notes / Notas
+
+**[ES]**
+- Sin cambios de lógica, schema ni handlers. Solo strings de descripción y número de versión.
+- Se salta la versión `1.1.3` deliberadamente: el repo y la instalación personal del autor convergen en `1.1.4` con un único cambio agrupado.
+
+**[EN]**
+- No logic, schema or handler changes. Only description strings and version number.
+- Version `1.1.3` is skipped on purpose: the repository and the author's personal installation converge on `1.1.4` with a single grouped change.
+
+---
+
 ## [1.1.2] — 2026-04-30
 
 ### Changed
