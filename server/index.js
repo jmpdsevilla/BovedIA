@@ -216,9 +216,14 @@ function splitBodyAndTrailing(body) {
   return { mainBody, trailing };
 }
 
+// Also accepts reserved names like HOME (read from vault root).
 function loadNote(name) {
-  const filePath = findNote(name);
-  if (!filePath) return null;
+  const reservedNames = { HOME: 'HOME.md' };
+  const reservedFile = reservedNames[name?.toUpperCase?.()];
+  const filePath = reservedFile
+    ? path.join(MEMORY_ROOT, reservedFile)
+    : findNote(name);
+  if (!filePath || !fs.existsSync(filePath)) return null;
   const content = fs.readFileSync(filePath, 'utf8');
   const { frontmatter, body } = parseFrontmatter(content);
   return { filePath, content, frontmatter, body };
