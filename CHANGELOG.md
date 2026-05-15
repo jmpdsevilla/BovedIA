@@ -8,6 +8,82 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and versionin
 
 ---
 
+## [1.2.0] — 2026-05-15
+
+### Added
+
+**[ES]**
+
+Esta versión amplía el MCP de 9 a 27 herramientas, agrupadas en cuatro bloques. La motivación es eliminar la sobrecarga de tener que reenviar la nota completa para cualquier cambio, además de cubrir mantenimiento de la bóveda (wikilinks, tags, validación) sin scripts ad hoc.
+
+**Edición puntual (5):**
+- `edit_note` — find/replace exacto. Falla por ambigüedad si `old_text` no es único; `replace_all: true` lo fuerza.
+- `append_to_note` — añade al final del cuerpo. Si la nota termina en una línea de hashtags `#snake_case`, inserta antes de los hashtags.
+- `prepend_to_note` — inserta al principio (tras el h1).
+- `update_section` — reemplaza una sección markdown entera por su título de encabezado, conservando el encabezado.
+- `insert_after_section` — inserta una nueva sección justo después de otra existente.
+
+**Wikilinks y tags (6):**
+- `list_broken_links` — todos los wikilinks rotos de la bóveda agrupados por nota.
+- `find_backlinks` — solo backlinks de una nota, sin cargar su contenido.
+- `find_orphans` — notas sin backlinks ni outlinks.
+- `rename_wikilink` — sustituye globalmente `[[old]]` por `[[new]]` sin tocar archivos.
+- `list_tags` — todos los hashtags `#snake_case` del cuerpo con conteo de notas.
+- `update_frontmatter` — cambia campos YAML (title, category, tags, created) sin tocar el cuerpo. Si cambia category, mueve el archivo.
+
+**Lecturas económicas (3):**
+- `peek_note` — frontmatter + primer párrafo.
+- `read_section` — solo una sección markdown por título.
+- `read_frontmatter` — solo el YAML.
+
+**Mantenimiento (4):**
+- `recently_updated` — notas modificadas en los últimos N días (por defecto 7).
+- `move_category` — renombra una carpeta entera y actualiza el `category` de cada nota.
+- `validate_note` — auditoría de estructura: frontmatter, "Ver también" / "See also", hashtags, wikilinks rotos.
+- `bulk_move` — mueve varias notas a la misma categoría destino en una sola llamada.
+
+**[EN]**
+
+This release expands the MCP from 9 to 27 tools, grouped in four blocks. The motivation is to remove the overhead of re-sending the entire note for every change, plus cover vault maintenance (wikilinks, tags, validation) without ad hoc scripts.
+
+**Targeted editing (5):**
+- `edit_note` — exact find/replace. Fails on ambiguity if `old_text` is not unique; `replace_all: true` forces it.
+- `append_to_note` — appends at the end of the body. If the note ends with a `#snake_case` hashtag line, inserts before the hashtags.
+- `prepend_to_note` — inserts at the beginning (after h1).
+- `update_section` — replaces an entire markdown section by its heading text, preserving the heading.
+- `insert_after_section` — inserts a new section right after an existing one.
+
+**Wikilinks and tags (6):**
+- `list_broken_links` — all broken wikilinks in the vault grouped by note.
+- `find_backlinks` — backlinks of a note only, without loading its content.
+- `find_orphans` — notes with no backlinks and no outlinks.
+- `rename_wikilink` — globally substitute `[[old]]` with `[[new]]` without touching files.
+- `list_tags` — all `#snake_case` hashtags from bodies with note counts.
+- `update_frontmatter` — change YAML fields (title, category, tags, created) without touching the body. If category changes, the file is moved.
+
+**Cheap reads (3):**
+- `peek_note` — frontmatter + first paragraph.
+- `read_section` — just one markdown section by heading.
+- `read_frontmatter` — just the YAML.
+
+**Maintenance (4):**
+- `recently_updated` — notes modified in the last N days (default 7).
+- `move_category` — rename an entire folder and update the `category` of each note.
+- `validate_note` — structure audit: frontmatter, "See also" / "Ver también", hashtags, broken wikilinks.
+- `bulk_move` — move several notes to the same destination category in a single call.
+
+### Notes / Notas
+
+**[ES]**
+- Compatibilidad total con v1.1.4: las 9 herramientas existentes mantienen mismos nombres, parámetros y comportamiento.
+- Las descripciones de las nuevas herramientas siguen la regla de v1.1.4: incluyen verbos de acción para que el ranker de `tool_search` las priorice ante consultas en lenguaje natural.
+
+**[EN]**
+- Fully backward compatible with v1.1.4: the original 9 tools keep their names, parameters and behaviour.
+- New tool descriptions follow the v1.1.4 rule: they include action verbs so that the `tool_search` ranker prioritises them on natural-language queries.
+
+---
+
 ## [1.1.4] — 2026-05-04
 
 ### Changed
@@ -122,6 +198,8 @@ No other behavioral changes. All 9 tools still accept the same parameters and re
 - 8 MCP tools operational.
 - Vault configuration via the `MEMORY_PATH` environment variable.
 
+[1.2.0]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.2.0
+[1.1.4]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.4
 [1.1.2]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.2
 [1.1.1]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.1
 [1.1.0]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.0

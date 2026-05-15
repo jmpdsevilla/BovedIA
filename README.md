@@ -41,9 +41,13 @@ There are many memory systems for Claude and AI agents, but most are complex, re
 
 ## Características / Features
 
-- 9 MCP tools: write, read, search, list, move, delete notes and categories
-- Wikilinks between notes with automatic backlink tracking
-- Auto-generated vault index with backlink counts
+- **27 MCP tools** in four blocks: base CRUD, targeted editing, wikilink/tag maintenance, cheap reads
+- **Targeted editing** — find/replace, append, prepend, section update without re-sending the whole file
+- **Markdown-aware section operations** — read or rewrite a section by its heading
+- **Cheap reads** — peek (frontmatter + first paragraph), read a single section, read frontmatter only
+- **Wikilink tools** — list broken links, find backlinks, find orphans, rename a wikilink globally
+- **Tag tools** — list all `#snake_case` hashtags with note counts
+- **Vault maintenance** — recently updated, validate note structure, bulk move, move category
 - AND logic search — all terms must appear in the note
 - Automatic wikilink update when a note is renamed
 - Frontmatter with title, category, tags, created and updated dates
@@ -168,11 +172,13 @@ The folder structure is flexible — create the categories that make sense for y
 
 ---
 
-## Las 9 herramientas / The 9 tools
+## Las 27 herramientas / The 27 tools
+
+### Base CRUD (9)
 
 | Tool | What it does |
 |---|---|
-| `write_note` | Create or update a note |
+| `write_note` | Create or update a note (full upsert) |
 | `read_note` | Read a note (searches all categories) |
 | `search_notes` | Search by free text (AND logic) |
 | `list_notes` | List notes, filtered by category or tag |
@@ -181,6 +187,44 @@ The folder structure is flexible — create the categories that make sense for y
 | `create_category` | Create a new folder |
 | `move_note` | Move/rename a note (auto-updates wikilinks) |
 | `delete_category` | Delete an empty folder |
+
+### Targeted editing (5)
+
+| Tool | What it does |
+|---|---|
+| `edit_note` | find/replace inside a note (fails on ambiguity unless `replace_all`) |
+| `append_to_note` | Append content at the end (before trailing hashtags) |
+| `prepend_to_note` | Insert content at the beginning (after h1) |
+| `update_section` | Replace a markdown section by its heading |
+| `insert_after_section` | Insert a new section right after another |
+
+### Wikilink and tag maintenance (6)
+
+| Tool | What it does |
+|---|---|
+| `list_broken_links` | All broken wikilinks in the vault |
+| `find_backlinks` | Backlinks of a note (without loading content) |
+| `find_orphans` | Notes with no backlinks and no outlinks |
+| `rename_wikilink` | Globally substitute `[[old]]` with `[[new]]` |
+| `list_tags` | All `#snake_case` hashtags with usage counts |
+| `update_frontmatter` | Update YAML fields without touching the body |
+
+### Cheap reads (3)
+
+| Tool | What it does |
+|---|---|
+| `peek_note` | Frontmatter + first paragraph |
+| `read_section` | Just one markdown section |
+| `read_frontmatter` | Just the YAML |
+
+### Vault maintenance (4)
+
+| Tool | What it does |
+|---|---|
+| `recently_updated` | Notes modified in the last N days |
+| `move_category` | Rename a folder, updates each note frontmatter |
+| `validate_note` | Check frontmatter, hashtags, See also, broken links |
+| `bulk_move` | Move several notes to the same category |
 
 See [docs/tools-reference.md](docs/tools-reference.md) for the full reference.
 
