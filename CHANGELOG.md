@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and versionin
 
 ---
 
+## [1.3.1] — 2026-05-19
+
+### Added
+
+**[ES]** Limpieza automática de carpetas vacías tras `delete_note`, `move_note`, `update_frontmatter` (con cambio de categoría) y `bulk_move`. Si la carpeta origen queda vacía tras la operación, se elimina; sube recursivamente al padre si también queda vacío. Nunca toca `MEMORY_ROOT` ni nada fuera de él. Considera `.DS_Store` residual al evaluar "carpeta vacía".
+
+**[EN]** Automatic cleanup of empty folders after `delete_note`, `move_note`, `update_frontmatter` (with category change) and `bulk_move`. If the source folder ends up empty, it's removed; the cleanup walks up to the parent if it's also empty. Never touches `MEMORY_ROOT` or anything outside it. Considers residual `.DS_Store` files when evaluating emptiness.
+
+---
+
 ## [1.3.0] — 2026-05-19
 
 ### Added

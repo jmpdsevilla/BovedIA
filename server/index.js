@@ -565,12 +565,36 @@ function extractBodyAuthorsFromRaw(rawContent) {
     .filter((a) => a.ranges.length > 0);
 }
 
-// Lee una nota desde disco y devuelve { filePath, content, frontmatter, body, bodyAuthors }.
-// - `body`: cuerpo sin frontmatter, sin bloque Markdown Annotations, sin whitespace
-//   al inicio ni al final (trimmed). Los offsets de bodyAuthors están alineados con
-//   este `body` exacto.
-// - `bodyAuthors`: autores with rangos CUERPO-RELATIVOS (vacío si no hay bloque).
-// - `content`: archivo completo tal cual está en disco.
+// After deleting or moving a note, checks if the source folder is empty and,
+// if so, removes it. Climbs recursively: if the parent is also empty, removes
+// it as well. Never touches MEMORY_ROOT or anything outside it.
+function cleanupEmptyAncestors(dir) {
+  try {
+    const root = path.resolve(MEMORY_ROOT);
+    let current = path.resolve(dir);
+    while (current.startsWith(root + path.sep) && current !== root) {
+      let entries;
+      try { entries = fs.readdirSync(current); } catch { return; }
+      // Ignore typical macOS hidden files (.DS_Store) when checking emptiness
+      const visible = entries.filter((e) => e !== '.DS_Store');
+      if (visible.length > 0) return;
+      // Remove any residual .DS_Store then the folder itself
+      for (const e of entries) {
+        try { fs.unlinkSync(path.join(current, e)); } catch {}
+      }
+      try { fs.rmdirSync(current); } catch { return; }
+      current = path.dirname(current);
+    }
+  } catch {
+    // Silent: cleanup must not break the main operation
+  }
+}
+
+// Loads a note from disk and returns { filePath, content, frontmatter, body, bodyAuthors }.
+// - `body`: content without frontmatter, without the Markdown Annotations block,
+//   trimmed of leading/trailing whitespace. bodyAuthors offsets align with this exact body.
+// - `bodyAuthors`: authors with BODY-RELATIVE ranges (empty if no block).
+// - `content`: full file content as on disk.
 function loadNote(name) {
   const reservedNames = { HOME: 'HOME.md' };
   const reservedFile = reservedNames[name?.toUpperCase?.()];
@@ -1175,6 +1199,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const allNotes = getAllNotes();
       const backlinks = getBacklinks(args.name, allNotes);
       fs.unlinkSync(filePath);
+      cleanupEmptyAncestors(path.dirname(filePath));
 
       let msg = `Note "${args.name}" removed.`;
       if (backlinks.length) {
@@ -1252,6 +1277,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         newBodyAuthors,
       );
       fs.unlinkSync(srcPath);
+      cleanupEmptyAncestors(path.dirname(srcPath));
 
       const oldSlug = path.basename(srcPath, '.md');
       const allNotes = getAllNotes();
@@ -1587,7 +1613,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // El cuerpo no cambia. Preservamos los rangos de autoría existentes.
       persistNote(destPath, newFm, note.body, note.bodyAuthors);
-      if (destPath !== note.filePath) fs.unlinkSync(note.filePath);
+      if (destPath !== note.filePath) {
+        fs.unlinkSync(note.filePath);
+        cleanupEmptyAncestors(path.dirname(note.filePath));
+      }
 
       return { content: [{ type: 'text', text: `Frontmatter of "${args.name}" updated.` }] };
     }
@@ -1772,6 +1801,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           bodyAuthors,
         );
         fs.unlinkSync(srcPath);
+        cleanupEmptyAncestors(path.dirname(srcPath));
         results.push(`- ${noteName}: moved to ${args.new_category}`);
       }
 
