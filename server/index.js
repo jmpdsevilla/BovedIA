@@ -712,7 +712,7 @@ function findSection(body, title) {
 // ─── Servidor MCP ──────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'simple-memory-claude', version: '1.3.0' },
+  { name: 'simple-memory-claude', version: '1.3.1' },
   { capabilities: { tools: {} } }
 );
 
