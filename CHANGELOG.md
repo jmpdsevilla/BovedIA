@@ -8,6 +8,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and versionin
 
 ---
 
+## [1.3.0] — 2026-05-19
+
+### Added
+
+**[ES]**
+
+Soporte opcional para [Markdown Annotations](https://github.com/iainc/Markdown-Annotations) (spec abierta, originalmente de iA Writer). Al activarlo, cada nota persistida lleva al final un bloque que registra qué autor escribió qué rangos del texto. Permite trazabilidad de autoría entre Claude (escribiendo vía MCP) y el usuario humano (editando en iA Writer u otro editor compatible).
+
+**Opt-in**: la feature está desactivada por defecto. Para activarla, arranca el MCP con la variable de entorno `KB_ENABLE_ANNOTATIONS=1` (acepta también `true`, `yes`, `on`). Sin esa variable, el MCP mantiene el comportamiento de v1.2.0 (sin bloque al final).
+
+Cuando está activado:
+- `write_note`, `edit_note`, `append_to_note`, `prepend_to_note`, `update_section`, `insert_after_section`, `move_note`, `rename_wikilink`, `update_frontmatter`, `move_category`, `bulk_move` añaden o actualizan el bloque automáticamente atribuyendo el contenido nuevo a Claude (`&Claude`).
+- Cuando iA Writer edita una nota y registra autoría humana (`@nombre`), el MCP preserva esos rangos en las siguientes escrituras (solo regenera lo realmente cambiado, no destruye los rangos humanos).
+- `write_note` se vuelve auto-protectivo: si la nota existente tiene autoría humana, falla con un mensaje claro y sugiere usar `edit_note` u otra tool de edición puntual.
+
+**Nuevas herramientas:**
+
+- `read_authorship(name)` — devuelve un resumen compacto de la autoría del cuerpo de una nota: por cada autor, sus rangos (en grapheme indexes relativos al cuerpo), el porcentaje del cuerpo que cubre y un extracto de cada rango.
+- `migrate_annotations({ dry_run })` — operación one-shot que añade el bloque a todas las notas existentes que aún no lo tienen, atribuyendo el cuerpo a Claude. Preserva el campo `updated` original de cada nota. Por defecto en modo `dry_run: true` para auditar sin escribir.
+
+`read_note` ahora filtra el bloque del output devuelto (es metadata interna, no contenido relevante). Para consultar la autoría se usa `read_authorship`.
+
+El hash SHA-256 del bloque se trunca a 20 caracteres (la spec permite 20-64; 20 es lo que usa iA Writer). El parser acepta tanto `Annotations:` (inglés) como `Anotaciones:` (formato que escribe iA Writer en archivos en español).
+
+**[EN]**
+
+Optional support for [Markdown Annotations](https://github.com/iainc/Markdown-Annotations) (open spec, originally from iA Writer). When enabled, every persisted note carries a block at the end recording which author wrote which ranges of the text. Enables authorship traceability between Claude (writing via MCP) and the human user (editing in iA Writer or another compatible editor).
+
+**Opt-in**: the feature is disabled by default. To enable it, start the MCP with the environment variable `KB_ENABLE_ANNOTATIONS=1` (also accepts `true`, `yes`, `on`). Without that variable, the MCP keeps v1.2.0 behavior (no block at the end).
+
+When enabled:
+- `write_note`, `edit_note`, `append_to_note`, `prepend_to_note`, `update_section`, `insert_after_section`, `move_note`, `rename_wikilink`, `update_frontmatter`, `move_category`, `bulk_move` add or update the block automatically attributing new content to Claude (`&Claude`).
+- When iA Writer edits a note and registers human authorship (`@name`), the MCP preserves those ranges in subsequent writes (only regenerates what actually changed, does not destroy human ranges).
+- `write_note` becomes self-protective: if the existing note has human authorship, it fails with a clear message suggesting `edit_note` or another point-edit tool.
+
+**New tools:**
+
+- `read_authorship(name)` — returns a compact summary of body authorship: per author, their ranges (grapheme indexes relative to the body), the percentage they cover and a snippet of each range.
+- `migrate_annotations({ dry_run })` — one-shot operation that adds the block to all existing notes that don't have one yet, attributing the body to Claude. Preserves each note's original `updated` field. Defaults to `dry_run: true` to audit without writing.
+
+`read_note` now filters the block from the returned output (it's internal metadata, not relevant content). Use `read_authorship` to query authorship.
+
+The block's SHA-256 hash is truncated to 20 characters (the spec allows 20-64; 20 is what iA Writer uses). The parser accepts both `Annotations:` (English) and `Anotaciones:` (the format iA Writer writes in Spanish files).
+
+---
+
 ## [1.2.0] — 2026-05-15
 
 ### Added

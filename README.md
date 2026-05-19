@@ -41,13 +41,14 @@ There are many memory systems for Claude and AI agents, but most are complex, re
 
 ## Características / Features
 
-- **27 MCP tools** in four blocks: base CRUD, targeted editing, wikilink/tag maintenance, cheap reads
+- **29 MCP tools** in four blocks: base CRUD, targeted editing, wikilink/tag maintenance, cheap reads
 - **Targeted editing** — find/replace, append, prepend, section update without re-sending the whole file
 - **Markdown-aware section operations** — read or rewrite a section by its heading
 - **Cheap reads** — peek (frontmatter + first paragraph), read a single section, read frontmatter only
 - **Wikilink tools** — list broken links, find backlinks, find orphans, rename a wikilink globally
 - **Tag tools** — list all `#snake_case` hashtags with note counts
 - **Vault maintenance** — recently updated, validate note structure, bulk move, move category
+- **Optional authorship tracking** — Markdown Annotations support (opt-in via `KB_ENABLE_ANNOTATIONS=1`). Tracks which author wrote which ranges of each note, preserves human authorship when Claude edits afterward. Renders natively in iA Writer.
 - AND logic search — all terms must appear in the note
 - Automatic wikilink update when a note is renamed
 - Frontmatter with title, category, tags, created and updated dates
@@ -151,6 +152,42 @@ Restart Claude Code and ask Claude to run `get_index`. You should see your vault
 
 ---
 
+## Authorship tracking (optional)
+
+**[ES]** El MCP soporta opcionalmente [Markdown Annotations](https://github.com/iainc/Markdown-Annotations), una spec abierta originalmente de iA Writer que permite registrar **qué autor escribió qué parte de cada nota**. Cuando se activa, las notas escritas por Claude llevan al final un bloque que atribuye el cuerpo a `&Claude`; cuando un humano edita la nota en iA Writer, sus rangos quedan marcados como `@nombre`, y la siguiente vez que el MCP toque la nota preserva esa autoría sin sobrescribirla.
+
+**[EN]** The MCP optionally supports [Markdown Annotations](https://github.com/iainc/Markdown-Annotations), an open spec originally from iA Writer that records **which author wrote which part of each note**. When enabled, notes written by Claude carry a block at the end attributing the body to `&Claude`; when a human edits the note in iA Writer, their ranges are marked as `@name`, and the next time the MCP touches the note their authorship is preserved instead of overwritten.
+
+**How to enable / Cómo activarlo:**
+
+Add `KB_ENABLE_ANNOTATIONS=1` to the MCP environment:
+
+```json
+{
+  "mcpServers": {
+    "simple-memory": {
+      "command": "node",
+      "args": ["/absolute/path/to/simple-memory-claude/server/index.js"],
+      "env": {
+        "KB_ENABLE_ANNOTATIONS": "1"
+      }
+    }
+  }
+}
+```
+
+**Two extra tools become available / Dos herramientas adicionales:**
+
+- `read_authorship(name)` — compact summary of who wrote which ranges.
+- `migrate_annotations({ dry_run })` — one-shot tool to add the block to all existing notes (preserves the original `updated` field). Run with `dry_run: true` first to audit.
+
+**Important / Importante:**
+
+- **Disabled by default.** Without `KB_ENABLE_ANNOTATIONS=1` the MCP behaves identically to v1.2.0: no annotation block at the end of files.
+- Editors that don't support the spec render the block as plain text at the end of the file. Only enable if you use iA Writer or another compatible editor.
+
+---
+
 ## Estructura recomendada de la bóveda / Recommended vault structure
 
 ```
@@ -172,7 +209,10 @@ The folder structure is flexible — create the categories that make sense for y
 
 ---
 
-## Las 27 herramientas / The 27 tools
+## Las herramientas / The tools
+
+(29 tools in total — 27 always available + 2 unlocked by `KB_ENABLE_ANNOTATIONS=1`)
+
 
 ### Base CRUD (9)
 
