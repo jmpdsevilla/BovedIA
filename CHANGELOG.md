@@ -8,6 +8,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and versionin
 
 ---
 
+## [1.4.0] — 2026-06-17
+
+### Added
+
+**[ES]** Modo solo-bandeja opt-in (`KB_INBOX_ONLY=1`): candado duro pensado para asistentes locales o no confiables. Cuando está activo, el asistente solo puede LEER notas y CREAR notas nuevas en la carpeta de entrada; quedan bloqueadas las operaciones de editar, borrar, mover y renombrar. Se impone en el servidor, no depende de que el modelo obedezca. El nombre de la carpeta de entrada es configurable con `KB_INBOX_FOLDER` (por defecto `inbox`). Off por defecto.
+
+**[EN]** Opt-in inbox-only mode (`KB_INBOX_ONLY=1`): a hard lock intended for local or untrusted assistants. When enabled, the assistant can only READ notes and CREATE new notes in the inbox folder; edit, delete, move and rename operations are blocked. Enforced in the server, not reliant on the model obeying. The inbox folder name is configurable via `KB_INBOX_FOLDER` (defaults to `inbox`). Off by default.
+
+### Changed
+
+**[ES]** El filtro de categoría de `list_notes` ahora es recursivo: incluye la categoría indicada y todas sus subcarpetas (p. ej. `clients` devuelve también las notas de `clients/acme`). Antes era coincidencia exacta. Descripciones de la herramienta y del parámetro `category` aclaradas.
+
+**[EN]** The `list_notes` category filter is now recursive: it includes the given category and all of its subfolders (e.g. `clients` also returns notes under `clients/acme`). Previously it was an exact match. Tool and `category` parameter descriptions clarified.
+
+**[ES]** `write_note` limpia ahora de forma defensiva el bloque de frontmatter o el encabezado H1 duplicado que algunos asistentes incluyen en el contenido, para que todos los clientes produzcan la misma estructura.
+
+**[EN]** `write_note` now defensively strips a duplicated frontmatter block or leading H1 that some assistants include in the content, so all clients produce the same structure.
+
+---
+
 ## [1.3.1] — 2026-05-19
 
 ### Added

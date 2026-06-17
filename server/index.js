@@ -712,7 +712,7 @@ function findSection(body, title) {
 // ─── Servidor MCP ──────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'simple-memory-claude', version: '1.3.1' },
+  { name: 'simple-memory-claude', version: '1.4.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -739,11 +739,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_notes',
-      description: 'List all notes with their metadata, optionally filtered by category and/or tag.',
+      description: 'List notes with their metadata, optionally filtered by category and/or tag. The category filter is RECURSIVE: it includes the given category and all of its subfolders. For example, category "clients" returns the notes directly under clients/ AND every note in subfolders such as "clients/acme". To narrow down to a specific subfolder, use its full category (e.g. "clients/acme"). To see the full folder structure of the vault, use get_index.',
       inputSchema: {
         type: 'object',
         properties: {
-          category: { type: 'string', description: 'Optional category to filter results' },
+          category: { type: 'string', description: 'Category to filter by (recursive): returns notes in that category and all of its subfolders. Use the root category (e.g. "clients") for the whole tree, or a full subcategory (e.g. "clients/acme") to narrow down to a single subfolder.' },
           tag: { type: 'string', description: 'Optional tag to filter notes containing that tag' },
         },
       },
@@ -1037,6 +1037,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
+    // ── Inbox-only mode (KB_INBOX_ONLY) — hard lock for untrusted/local assistants ──
+    // When enabled, the assistant may only READ notes and CREATE new notes in the
+    // inbox folder. Enforced here in the server, not relying on the model obeying
+    // instructions. Opt-in via env var; off by default. The inbox folder name is
+    // configurable via KB_INBOX_FOLDER (defaults to "inbox").
+    if (process.env.KB_INBOX_ONLY === '1' || process.env.KB_INBOX_ONLY === 'true') {
+      const INBOX_FOLDER = process.env.KB_INBOX_FOLDER || 'inbox';
+      const BLOCKED = new Set(['edit_note', 'delete_note', 'move_note', 'bulk_move', 'update_section', 'insert_after_section', 'append_to_note', 'prepend_to_note', 'update_frontmatter', 'rename_wikilink', 'move_category', 'delete_category', 'create_category', 'migrate_annotations']);
+      if (BLOCKED.has(name)) {
+        return { content: [{ type: 'text', text: `Inbox-only mode active: you can only READ notes and CREATE new notes in the "${INBOX_FOLDER}" folder. You cannot edit, delete, move or rename existing notes. To save something, use write_note and it will be created in "${INBOX_FOLDER}".` }] };
+      }
+      if (name === 'write_note') {
+        args.category = INBOX_FOLDER;
+        args.name = undefined;
+      }
+    }
+
     // ── write_note ──────────────────────────────────────────────────────
     if (name === 'write_note') {
       const slug = args.name ? args.name : slugify(args.title);
@@ -1078,7 +1095,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      const body = `# ${args.title}\n\n${args.content}\n`;
+      // Defensive cleanup: the server already adds the frontmatter and the H1
+      // title. If the received content includes its own frontmatter or a leading
+      // H1 (some assistants add it following older templates), strip them so they
+      // are not duplicated in the body. Keeps all clients producing the same structure.
+      const stripLeadingMeta = (raw) => {
+        let c = (raw || '').replace(/^﻿/, '').replace(/^\s+/, '');
+        if (c.startsWith('---')) {
+          const end = c.indexOf('\n---', 3);
+          if (end !== -1) {
+            const after = c.indexOf('\n', end + 1);
+            c = (after !== -1 ? c.slice(after + 1) : '').replace(/^\s+/, '');
+          }
+        }
+        if (c.startsWith('# ')) {
+          const nl = c.indexOf('\n');
+          c = (nl !== -1 ? c.slice(nl + 1) : '').replace(/^\s+/, '');
+        }
+        return c;
+      };
+      const body = `# ${args.title}\n\n${stripLeadingMeta(args.content)}\n`;
       // bodyAuthors=null → todo el cuerpo se atribuye a Claude.
       persistNote(
         filePath,
@@ -1157,7 +1193,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'list_notes') {
       const allNotes = getAllNotes();
       const filtered = allNotes.filter((n) => {
-        const matchCategory = !args.category || n.category === args.category;
+        const matchCategory = !args.category || n.category === args.category || n.category.startsWith(args.category + '/');
         const matchTag = !args.tag || (
           Array.isArray(n.frontmatter.tags)
             ? n.frontmatter.tags.includes(args.tag)
