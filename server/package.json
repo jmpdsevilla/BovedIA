@@ -1,6 +1,6 @@
 {
   "name": "simple-memory-claude",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Simple personal memory system for Claude Code — Markdown notes synced to cloud storage",
   "main": "index.js",
   "type": "module",

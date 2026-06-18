@@ -55,6 +55,32 @@ const ANNOTATIONS_ENABLED = (() => {
 // sobrevivan a cambios de codificación y a emojis/secuencias compuestas.
 const _graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
 
+// ─── Unicode normalization (NFC) ───────────────────────────────────────────
+// macOS/iCloud and some editors (iA Writer) may store text in DECOMPOSED form
+// (NFC vs NFD): "Versión" saved as "Versio" + a combining accent. If the file is
+// in NFD and the text arriving from the tool is in NFC (or the other way round),
+// literal comparisons (split/replace/includes) fail with "text not found" even
+// though both sides look identical. To prevent this we normalize to NFC at the
+// two boundaries: what is read from disk and what comes in as input arguments.
+const nfc = (s) => (typeof s === 'string' ? s.normalize('NFC') : s);
+
+// Reads a note file from disk normalized to NFC. The single read entry point.
+function readNoteFile(filePath) {
+  return fs.readFileSync(filePath, 'utf8').normalize('NFC');
+}
+
+// Normalizes to NFC every text value of a tool's arguments (strings and arrays
+// of strings). Idempotent and safe: NFC is the canonical form.
+function normalizeArgs(args) {
+  if (!args || typeof args !== 'object') return args;
+  for (const k of Object.keys(args)) {
+    const v = args[k];
+    if (typeof v === 'string') args[k] = nfc(v);
+    else if (Array.isArray(v)) args[k] = v.map((x) => (typeof x === 'string' ? nfc(x) : x));
+  }
+  return args;
+}
+
 function countGraphemes(text) {
   let count = 0;
   for (const _ of _graphemeSegmenter.segment(text)) count++;
@@ -437,7 +463,7 @@ function getAllNotes() {
         scanDir(fullPath, childCategory);
       } else if (entry.isFile() && entry.name.endsWith('.md') && !RESERVED.has(entry.name)) {
         try {
-          const content = fs.readFileSync(fullPath, 'utf8');
+          const content = readNoteFile(fullPath);
           const { frontmatter } = parseFrontmatter(content);
           const wikilinks = [...stripCode(content).matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
           notes.push({
@@ -625,7 +651,7 @@ function loadNote(name) {
     ? path.join(MEMORY_ROOT, reservedFile)
     : findNote(name);
   if (!filePath || !fs.existsSync(filePath)) return null;
-  const content = fs.readFileSync(filePath, 'utf8');
+  const content = readNoteFile(filePath);
   const { frontmatter, body: rawBody } = parseFrontmatter(content);
   const { cleanBody } = stripAnnotationBlock(rawBody);
   const body = cleanBody.replace(/^\s+/, '').replace(/\s+$/, '');
@@ -735,7 +761,7 @@ function findSection(body, title) {
 // ─── Servidor MCP ──────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'simple-memory-claude', version: '1.5.0' },
+  { name: 'simple-memory-claude', version: '1.5.1' },
   { capabilities: { tools: {} } }
 );
 
@@ -1059,6 +1085,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  // Normalize all input arguments to NFC so comparisons against on-disk text
+  // (also read as NFC) never fail due to NFC/NFD mismatches.
+  normalizeArgs(args);
+
   try {
     // ── Write-only-inbox mode — hard lock for untrusted/local assistants ──
     // Canonical variable: KB_WRITE_ONLY_INBOX ('1' or 'true'). Backward
@@ -1127,7 +1157,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       let created = today();
       if (exists) {
-        const existing = fs.readFileSync(filePath, 'utf8');
+        const existing = readNoteFile(filePath);
         const { frontmatter } = parseFrontmatter(existing);
         created = frontmatter.created || today();
 
@@ -1205,7 +1235,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
       }
 
-      const content = fs.readFileSync(filePath, 'utf8');
+      const content = readNoteFile(filePath);
       // Filtrar el bloque Markdown Annotations del output: es metadata interna del
       // MCP, no contenido relevante para el lector. La trazabilidad de autoría se
       // consulta with read_authorship.
@@ -1228,7 +1258,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const results = [];
 
       for (const note of allNotes) {
-        const content = fs.readFileSync(note.path, 'utf8');
+        const content = readNoteFile(note.path);
         const contentLower = content.toLowerCase();
         const nameLower = note.name.toLowerCase();
         const matchesAll = terms.every((term) => contentLower.includes(term) || nameLower.includes(term));
@@ -1328,7 +1358,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const srcPath = findNote(args.name);
       if (!srcPath) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
 
-      const existing = fs.readFileSync(srcPath, 'utf8');
+      const existing = readNoteFile(srcPath);
       const { frontmatter, body } = parseFrontmatter(existing);
       const newTitle = args.new_title || frontmatter.title || args.name;
       const newSlug = slugify(newTitle);
@@ -1387,7 +1417,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const newLinkLen = countGraphemes(newLink);
         for (const note of allNotes) {
           if (note.name === newSlug) continue;
-          const raw = fs.readFileSync(note.path, 'utf8');
+          const raw = readNoteFile(note.path);
           if (!raw.includes(oldLink)) continue;
           const { frontmatter: fm, body: noteBody } = parseFrontmatter(raw);
           const { cleanBody } = stripAnnotationBlock(noteBody);
@@ -1640,7 +1670,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       let updated = 0;
 
       for (const note of allNotes) {
-        const raw = fs.readFileSync(note.path, 'utf8');
+        const raw = readNoteFile(note.path);
         if (!raw.includes(oldLink)) continue;
         const { frontmatter, body: rawBody } = parseFrontmatter(raw);
         const { cleanBody } = stripAnnotationBlock(rawBody);
@@ -1683,7 +1713,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const tagCount = {};
 
       for (const note of allNotes) {
-        const content = fs.readFileSync(note.path, 'utf8');
+        const content = readNoteFile(note.path);
         const { body } = parseFrontmatter(content);
         const tags = extractHashtags(body);
         for (const t of tags) tagCount[t] = (tagCount[t] || 0) + 1;
@@ -1833,7 +1863,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const newCat = note.frontmatter.category === args.name
               ? args.new_name
               : note.frontmatter.category.replace(`${args.name}/`, `${args.new_name}/`);
-            const raw = fs.readFileSync(note.path, 'utf8');
+            const raw = readNoteFile(note.path);
             const { frontmatter, body: rawBody } = parseFrontmatter(raw);
             const { cleanBody } = stripAnnotationBlock(rawBody);
             const bodyAuthors = extractBodyAuthorsFromRaw(raw);
@@ -1886,7 +1916,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           results.push(`- ${noteName}: not found`);
           continue;
         }
-        const raw = fs.readFileSync(srcPath, 'utf8');
+        const raw = readNoteFile(srcPath);
         const { frontmatter, body } = parseFrontmatter(raw);
         const destPath = path.join(destDir, path.basename(srcPath));
         if (destPath === srcPath) {
@@ -1933,7 +1963,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const alreadyAnnotated = [];
       for (const nf of noteRefs) {
         try {
-          const raw = fs.readFileSync(nf.path, 'utf8');
+          const raw = readNoteFile(nf.path);
           const existing = extractBodyAuthorsFromRaw(raw);
           if (existing.length > 0) alreadyAnnotated.push(nf.name);
           else toMigrate.push(nf);
@@ -1961,7 +1991,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const errors = [];
       for (const nf of toMigrate) {
         try {
-          const raw = fs.readFileSync(nf.path, 'utf8');
+          const raw = readNoteFile(nf.path);
           const { frontmatter, body: rawBody } = parseFrontmatter(raw);
           const { cleanBody } = stripAnnotationBlock(rawBody);
           const body = cleanBody.replace(/^\s+/, '').replace(/\s+$/, '');

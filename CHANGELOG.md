@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and versionin
 
 ---
 
+## [1.5.1] — 2026-06-18
+
+### Fixed
+
+**[ES]** Normalización Unicode a NFC. Las notas guardadas en forma descompuesta (NFD) —habitual en macOS/iCloud y en iA Writer— hacían fallar `edit_note`, `append_to_note`, `update_section` y otras operaciones de edición con "no se encontró el texto", aunque el texto fuera visualmente idéntico: las comparaciones literales (`split`/`replace`/`includes`) fallan cuando un lado está en NFC y el otro en NFD. Ahora se normaliza a NFC en las dos fronteras: en la lectura de disco (todas las lecturas de notas pasan por un único punto) y en los argumentos de entrada de cada herramienta. Los offsets de las anotaciones no se ven afectados, porque los grapheme clusters se cuentan igual en NFC y en NFD.
+
+**[EN]** Unicode normalization to NFC. Notes stored in decomposed form (NFD) —common on macOS/iCloud and in iA Writer— made `edit_note`, `append_to_note`, `update_section` and other edit operations fail with "text not found", even when the text was visually identical: literal comparisons (`split`/`replace`/`includes`) fail when one side is NFC and the other NFD. Text is now normalized to NFC at the two boundaries: on disk reads (all note reads go through a single point) and on each tool's input arguments. Annotation offsets are unaffected, because grapheme clusters count the same in NFC and NFD.
+
+---
+
 ## [1.5.0] — 2026-06-18
 
 ### Added
