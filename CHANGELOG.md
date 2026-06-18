@@ -8,6 +8,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and versionin
 
 ---
 
+## [1.5.0] — 2026-06-18
+
+### Added
+
+**[ES]** Caché en memoria del índice de notas. `getAllNotes()` escanea y parsea todos los archivos del disco en cada lectura; ahora el resultado se cachea y se reutiliza, con doble invalidación: por escritura (todo handler de escritura llama a `invalidateCache()` al terminar con éxito) y por un TTL corto de 20 s (para recoger ediciones hechas directamente en los archivos, fuera del MCP). Acelera notablemente los handlers de lectura.
+
+**[EN]** In-memory cache of the note index. `getAllNotes()` scans and parses every file on disk on each read; the result is now cached and reused, with two-way invalidation: on write (every write handler calls `invalidateCache()` on success) and via a short 20 s TTL (to pick up edits made directly to the files, outside the MCP). Noticeably speeds up read handlers.
+
+**[ES]** Autor de las anotaciones Markdown configurable por entorno: `KB_AUTHOR_NAME` y `KB_AUTHOR_EMAIL`. Permite que varias instancias del servidor (p. ej. distintos asistentes) firmen cada una con su propio nombre. Por defecto, `Claude` / `noreply@anthropic.com`.
+
+**[EN]** Markdown annotations author configurable via environment: `KB_AUTHOR_NAME` and `KB_AUTHOR_EMAIL`. Lets multiple server instances (e.g. different assistants) each sign with their own name. Defaults to `Claude` / `noreply@anthropic.com`.
+
+### Changed
+
+**[ES]** El modo solo-bandeja se refina y pasa a llamarse `KB_WRITE_ONLY_INBOX` (se mantiene la compatibilidad con `KB_INBOX_ONLY`). Cambios de comportamiento: la lectura nunca se bloquea; la escritura solo se permite en la carpeta de entrada y, si el destino no es la bandeja, se **rechaza con un mensaje claro en vez de redirigir en silencio**; las notas existentes solo pueden modificarse si ya están en la bandeja; las operaciones de administración (crear/borrar/mover categorías, renombrar wikilinks, migrar anotaciones) quedan siempre bloqueadas.
+
+**[EN]** Inbox-only mode is refined and renamed `KB_WRITE_ONLY_INBOX` (backward compatible with `KB_INBOX_ONLY`). Behavior changes: reads are never blocked; writes are only allowed in the inbox folder and, if the target is not the inbox, the operation is now **rejected with a clear message instead of being silently redirected**; existing notes can only be modified if they already live in the inbox; admin operations (create/delete/move categories, rename wikilinks, migrate annotations) are always blocked.
+
+---
+
 ## [1.4.0] — 2026-06-17
 
 ### Added

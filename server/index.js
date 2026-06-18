@@ -36,7 +36,7 @@ const RESERVED = new Set(['HOME.md']);
 
 // AI author registered in the Markdown Annotations block (spec iainc/Markdown-Annotations v0.2).
 // `&` indicates AI authorship, `@` is reserved for humans, `*` for references.
-const CLAUDE_AUTHOR = { prefix: '&', name: 'Claude', identifier: 'noreply@anthropic.com' };
+const CLAUDE_AUTHOR = { prefix: '&', name: process.env.KB_AUTHOR_NAME || 'Claude', identifier: process.env.KB_AUTHOR_EMAIL || 'noreply@anthropic.com' };
 
 // Feature flag: the Markdown Annotations block is only generated when the user
 // explicitly enables it with the KB_ENABLE_ANNOTATIONS=1 (or "true") environment
@@ -458,6 +458,29 @@ function getAllNotes() {
   return notes;
 }
 
+// ─── Note index cache (performance) ─────────────────────────────────────────
+// getAllNotes() scans and parses every file on disk; it is expensive and is
+// invoked on each read handler. We cache the result in memory.
+// Invalidation works two complementary ways:
+//  - On write: write handlers call invalidateCache() on success (the most
+//    reliable path: reflects changes made by the MCP itself instantly).
+//  - Short TTL (20s): the user may edit notes directly in their editor, outside
+//    the MCP. Without a TTL those external edits would not show up until the
+//    server restarts. With the TTL the cache expires on its own and is rebuilt
+//    from disk, picking up external changes within at most 20 seconds.
+const CACHE_TTL_MS = 20000;
+let _cache = null;
+let _cacheTimestamp = 0;
+function getCachedAllNotes() {
+  if (_cache && Date.now() - _cacheTimestamp < CACHE_TTL_MS) return _cache;
+  _cache = getAllNotes();
+  _cacheTimestamp = Date.now();
+  return _cache;
+}
+function invalidateCache() {
+  _cache = null;
+}
+
 // Devuelve los nombres de notas que enlazan a targetName
 function getBacklinks(targetName, allNotes) {
   const targetSlug = slugify(targetName);
@@ -712,7 +735,7 @@ function findSection(body, title) {
 // ─── Servidor MCP ──────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'simple-memory-claude', version: '1.4.0' },
+  { name: 'simple-memory-claude', version: '1.5.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -1037,20 +1060,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    // ── Inbox-only mode (KB_INBOX_ONLY) — hard lock for untrusted/local assistants ──
-    // When enabled, the assistant may only READ notes and CREATE new notes in the
-    // inbox folder. Enforced here in the server, not relying on the model obeying
-    // instructions. Opt-in via env var; off by default. The inbox folder name is
-    // configurable via KB_INBOX_FOLDER (defaults to "inbox").
-    if (process.env.KB_INBOX_ONLY === '1' || process.env.KB_INBOX_ONLY === 'true') {
-      const INBOX_FOLDER = process.env.KB_INBOX_FOLDER || 'inbox';
-      const BLOCKED = new Set(['edit_note', 'delete_note', 'move_note', 'bulk_move', 'update_section', 'insert_after_section', 'append_to_note', 'prepend_to_note', 'update_frontmatter', 'rename_wikilink', 'move_category', 'delete_category', 'create_category', 'migrate_annotations']);
-      if (BLOCKED.has(name)) {
-        return { content: [{ type: 'text', text: `Inbox-only mode active: you can only READ notes and CREATE new notes in the "${INBOX_FOLDER}" folder. You cannot edit, delete, move or rename existing notes. To save something, use write_note and it will be created in "${INBOX_FOLDER}".` }] };
+    // ── Write-only-inbox mode — hard lock for untrusted/local assistants ──
+    // Canonical variable: KB_WRITE_ONLY_INBOX ('1' or 'true'). Backward
+    // compatibility with the old KB_INBOX_ONLY is kept: if it is still defined,
+    // it is treated as equivalent so existing installs do not break.
+    //
+    // Model (when the env is active):
+    //  - READ: never blocked.
+    //  - WRITE: only allowed in the inbox folder. If the target (or the note's
+    //    current category) is not the inbox, it is REJECTED with a clear message
+    //    (it is NOT silently redirected).
+    //  - ADMIN (create/delete/move categories, rename wikilinks globally,
+    //    migrate annotations): always blocked under this env.
+    // Without the env: default behavior = full access (does not enter here).
+    const WRITE_ONLY_INBOX = (() => {
+      const w = (process.env.KB_WRITE_ONLY_INBOX || '').toLowerCase();
+      const legacy = (process.env.KB_INBOX_ONLY || '').toLowerCase();
+      const on = (v) => v === '1' || v === 'true' || v === 'yes' || v === 'on';
+      return on(w) || on(legacy);
+    })();
+
+    if (WRITE_ONLY_INBOX) {
+      const INBOX = process.env.KB_INBOX_FOLDER || 'inbox';
+
+      // ADMIN: always blocked.
+      const ADMIN = new Set(['create_category', 'delete_category', 'move_category', 'rename_wikilink', 'migrate_annotations']);
+      if (ADMIN.has(name)) {
+        return { content: [{ type: 'text', text: `Write-only-inbox mode active: admin operations (${name}) are blocked. You can only read notes and write in the "${INBOX}" folder.` }], isError: true };
       }
-      if (name === 'write_note') {
-        args.category = INBOX_FOLDER;
-        args.name = undefined;
+
+      // write_note: only if the target category is the inbox.
+      if (name === 'write_note' && args.category !== INBOX) {
+        return { content: [{ type: 'text', text: `You can only write in "${INBOX}". The given category ("${args.category}") is not allowed in write-only-inbox mode.` }], isError: true };
+      }
+
+      // Writing over an existing note: reject if its current category is not the inbox.
+      const WRITE_ON_EXISTING = new Set(['edit_note', 'append_to_note', 'prepend_to_note', 'update_section', 'insert_after_section', 'update_frontmatter', 'delete_note']);
+      if (WRITE_ON_EXISTING.has(name)) {
+        const existing = loadNote(args.name);
+        if (!existing) {
+          return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+        }
+        if (existing.frontmatter.category !== INBOX) {
+          return { content: [{ type: 'text', text: `Write-only-inbox mode active: note "${args.name}" is in "${existing.frontmatter.category || 'root'}", not in "${INBOX}". You can only modify notes that are in the inbox folder.` }], isError: true };
+        }
+      }
+
+      // Moving notes: only if the target is the inbox.
+      if ((name === 'move_note' || name === 'bulk_move') && args.new_category !== INBOX) {
+        return { content: [{ type: 'text', text: `Write-only-inbox mode active: you can only move notes to "${INBOX}". The given target ("${args.new_category || 'none'}") is not allowed.` }], isError: true };
       }
     }
 
@@ -1131,6 +1189,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         msg += `\n\nNOTICE — Wikilinks pointing to non-existent notes: ${broken.map((b) => `[[${b}]]`).join(', ')}`;
       }
 
+      invalidateCache();
       return { content: [{ type: 'text', text: msg }] };
     }
 
@@ -1153,7 +1212,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { frontmatter, body: rawBody } = parseFrontmatter(content);
       const { cleanBody } = stripAnnotationBlock(rawBody);
       const filtered = `---\n${content.slice(4, content.indexOf('---\n', 4) + 4)}\n${cleanBody.replace(/^\s+/, '').replace(/\s+$/, '')}\n`;
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const backlinks = getBacklinks(args.name, allNotes);
       const backlinkText = backlinks.length > 0 ? backlinks.map((b) => `[[${b}]]`).join(', ') : 'ninguna';
 
@@ -1164,7 +1223,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── search_notes ────────────────────────────────────────────────────
     if (name === 'search_notes') {
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const terms = args.query.toLowerCase().split(/\s+/).filter(Boolean);
       const results = [];
 
@@ -1191,7 +1250,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── list_notes ──────────────────────────────────────────────────────
     if (name === 'list_notes') {
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const filtered = allNotes.filter((n) => {
         const matchCategory = !args.category || n.category === args.category || n.category.startsWith(args.category + '/');
         const matchTag = !args.tag || (
@@ -1241,12 +1300,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (backlinks.length) {
         msg += `\n\nNOTICE — The following notes had wikilinks pointing to it: ${backlinks.map((b) => `[[${b}]]`).join(', ')}. Review them to update or remove those links.`;
       }
+      invalidateCache();
       return { content: [{ type: 'text', text: msg }] };
     }
 
     // ── get_index ───────────────────────────────────────────────────────
     if (name === 'get_index') {
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const content = buildIndex(allNotes);
       return { content: [{ type: 'text', text: content }] };
     }
@@ -1259,6 +1319,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: `Category "${slug}" already exists.` }] };
       }
       fs.mkdirSync(dir, { recursive: true });
+      invalidateCache();
       return { content: [{ type: 'text', text: `Category "${slug}" created at memoria/${slug}/` }] };
     }
 
@@ -1361,6 +1422,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ? `\n\n${updatedNotes} nota(s) with wikilinks a [[${oldSlug}]] updated to [[${newSlug}]].`
           : `\n\n(No había notas with wikilinks a [[${oldSlug}]])`;
       }
+      invalidateCache();
       return { content: [{ type: 'text', text: msg }] };
     }
 
@@ -1375,6 +1437,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: `Cannot delete "${slug}": contains ${notes.length} note(s). Move or remove the notes first.` }] };
       }
       fs.rmSync(dir, { recursive: true });
+      invalidateCache();
       return { content: [{ type: 'text', text: `Category "${slug}" removed.` }] };
     }
 
@@ -1426,6 +1489,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       persistNote(note.filePath, note.frontmatter, newBody, bodyAuthors);
+      invalidateCache();
       return { content: [{ type: 'text', text: `Note "${args.name}" edited (${occurrences} ${occurrences === 1 ? 'occurrence replaced' : 'occurrences replaced'}).` }] };
     }
 
@@ -1446,6 +1510,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const newBodyAuthors = applyEditToAuthors(note.bodyAuthors, diff.editStart, diff.oldLength, diff.newLength);
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
+      invalidateCache();
       return { content: [{ type: 'text', text: `Content appended at the end of "${args.name}"${trailing ? ' (before the hashtag block).' : '.'}` }] };
     }
 
@@ -1470,6 +1535,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const newBodyAuthors = applyEditToAuthors(note.bodyAuthors, diff.editStart, diff.oldLength, diff.newLength);
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
+      invalidateCache();
       return { content: [{ type: 'text', text: `Content inserted at the beginning of "${args.name}".` }] };
     }
 
@@ -1493,6 +1559,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const newBodyAuthors = applyEditToAuthors(note.bodyAuthors, diff.editStart, diff.oldLength, diff.newLength);
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
+      invalidateCache();
       return { content: [{ type: 'text', text: `Section "${args.section_title}" updated in "${args.name}".` }] };
     }
 
@@ -1516,12 +1583,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const newBodyAuthors = applyEditToAuthors(note.bodyAuthors, diff.editStart, diff.oldLength, diff.newLength);
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
+      invalidateCache();
       return { content: [{ type: 'text', text: `Block inserted after section "${args.after_section_title}" en "${args.name}".` }] };
     }
 
     // ── list_broken_links ───────────────────────────────────────────────
     if (name === 'list_broken_links') {
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const RESERVED_LINKS = new Set(['HOME', 'home']);
       const broken = [];
 
@@ -1538,7 +1606,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── find_backlinks ──────────────────────────────────────────────────
     if (name === 'find_backlinks') {
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const backlinks = getBacklinks(args.name, allNotes);
       if (!backlinks.length) return { content: [{ type: 'text', text: `No note references "${args.name}".` }] };
       return { content: [{ type: 'text', text: `Backlinks of "${args.name}" (${backlinks.length}):\n${backlinks.map((b) => `- [[${b}]]`).join('\n')}` }] };
@@ -1546,7 +1614,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── find_orphans ────────────────────────────────────────────────────
     if (name === 'find_orphans') {
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const orphans = [];
       for (const note of allNotes) {
         const hasOutlinks = note.wikilinks.length > 0;
@@ -1605,12 +1673,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       if (!updated) return { content: [{ type: 'text', text: `No note referenced [[${args.old_slug}]].` }] };
+      invalidateCache();
       return { content: [{ type: 'text', text: `${updated} note(s) updated: [[${args.old_slug}]] → [[${args.new_slug}]].` }] };
     }
 
     // ── list_tags ───────────────────────────────────────────────────────
     if (name === 'list_tags') {
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const tagCount = {};
 
       for (const note of allNotes) {
@@ -1654,6 +1723,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         cleanupEmptyAncestors(path.dirname(note.filePath));
       }
 
+      invalidateCache();
       return { content: [{ type: 'text', text: `Frontmatter of "${args.name}" updated.` }] };
     }
 
@@ -1731,7 +1801,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       cutoff.setDate(cutoff.getDate() - days);
       const cutoffStr = cutoff.toISOString().split('T')[0];
 
-      const allNotes = getAllNotes();
+      const allNotes = getCachedAllNotes();
       const recent = allNotes
         .filter((n) => (n.frontmatter.updated || '') >= cutoffStr)
         .sort((a, b) => (b.frontmatter.updated || '').localeCompare(a.frontmatter.updated || ''));
@@ -1773,6 +1843,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      invalidateCache();
       return { content: [{ type: 'text', text: `Category "${args.name}" → "${args.new_name}". ${updated} note(s) with frontmatter updated.` }] };
     }
 
@@ -1841,6 +1912,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         results.push(`- ${noteName}: moved to ${args.new_category}`);
       }
 
+      invalidateCache();
       return { content: [{ type: 'text', text: `bulk_move completed:\n${results.join('\n')}` }] };
     }
 
@@ -1905,6 +1977,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const errorText = errors.length
         ? `\n\nErrors (${errors.length}):\n${errors.map((e) => `  - ${e.name}: ${e.error}`).join('\n')}`
         : '';
+      invalidateCache();
       return {
         content: [{
           type: 'text',

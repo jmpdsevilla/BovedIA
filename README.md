@@ -181,6 +181,11 @@ Add `KB_ENABLE_ANNOTATIONS=1` to the MCP environment:
 - `read_authorship(name)` — compact summary of who wrote which ranges.
 - `migrate_annotations({ dry_run })` — one-shot tool to add the block to all existing notes (preserves the original `updated` field). Run with `dry_run: true` first to audit.
 
+**Author name / Nombre del autor:**
+
+By default annotations are signed as `Claude` (`noreply@anthropic.com`). Override the signature with `KB_AUTHOR_NAME` and `KB_AUTHOR_EMAIL` so each server instance signs with its own identity (useful when several assistants share one vault).
+Por defecto las anotaciones se firman como `Claude` (`noreply@anthropic.com`). Cambia la firma con `KB_AUTHOR_NAME` y `KB_AUTHOR_EMAIL` para que cada instancia del servidor firme con su propia identidad (útil cuando varios asistentes comparten una misma bóveda).
+
 **Important / Importante:**
 
 - **Disabled by default.** Without `KB_ENABLE_ANNOTATIONS=1` the MCP behaves identically to v1.2.0: no annotation block at the end of files.
