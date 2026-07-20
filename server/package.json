@@ -1,7 +1,7 @@
 {
-  "name": "simple-memory-claude",
-  "version": "1.5.1",
-  "description": "Simple personal memory system for Claude Code — Markdown notes synced to cloud storage",
+  "name": "bovedia",
+  "version": "2.0.0",
+  "description": "BovedIA — sistema de memoria personal para Claude Code: notas Markdown en tu disco, sincronizadas en la nube",
   "main": "index.js",
   "type": "module",
   "scripts": {

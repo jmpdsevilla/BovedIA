@@ -1,28 +1,28 @@
-# Installation — Mac + iCloud Drive
+# Instalación — Mac + iCloud Drive
 
-iCloud Drive is the recommended option for Mac users. Your vault syncs automatically across all your Apple devices.
-
----
-
-## Requirements
-
-- macOS 12 or later
-- Node.js 18 or later (`node --version` to check)
-- iCloud Drive enabled and syncing
-- Claude Code installed (`npm install -g @anthropic-ai/claude-code`)
+iCloud Drive es la opción recomendada en Mac: tu bóveda se sincroniza sola entre todos tus dispositivos Apple.
 
 ---
 
-## Step 1 — Clone the repository
+## Requisitos
+
+- macOS 12 o superior
+- Node.js 18 o superior (`node --version` para comprobar)
+- iCloud Drive activado y sincronizando
+- Claude Code instalado (`npm install -g @anthropic-ai/claude-code`)
+
+---
+
+## Paso 1 — Clonar el repositorio
 
 ```bash
-git clone https://github.com/jmpdsevilla/simple-memory-claude.git
-cd simple-memory-claude
+git clone https://github.com/jmpdsevilla/BovedIA.git
+cd BovedIA
 ```
 
 ---
 
-## Step 2 — Install server dependencies
+## Paso 2 — Instalar las dependencias del servidor
 
 ```bash
 cd server
@@ -32,71 +32,56 @@ cd ..
 
 ---
 
-## Step 3 — Create your vault
+## Paso 3 — Crear tu bóveda
 
-Copy the example vault to iCloud Drive:
-
-```bash
-cp -r vault-example ~/Library/Mobile\ Documents/com~apple~CloudDocs/my-memory
-```
-
-Or create an empty vault:
+Copia la bóveda de ejemplo a iCloud Drive:
 
 ```bash
-mkdir -p ~/Library/Mobile\ Documents/com~apple~CloudDocs/my-memory
+cp -r vault-example ~/Library/Mobile\ Documents/com~apple~CloudDocs/mi-boveda
 ```
 
-Then copy `vault-example/HOME.md` into it and customize it with your own information.
+O crea una vacía:
+
+```bash
+mkdir -p ~/Library/Mobile\ Documents/com~apple~CloudDocs/mi-boveda
+```
+
+Luego copia `vault-example/Inicio.md` y `vault-example/HOME.md` dentro y personalízalos con tu información.
 
 ---
 
-## Step 4 — Configure Claude Code
+## Paso 4 — Configurar Claude Code
 
-Add the MCP server to your Claude Code settings.
-
-Open your Claude Code config file:
-
-```bash
-claude mcp add simple-memory -- node /absolute/path/to/simple-memory-claude/server/index.js
-```
-
-Or edit `~/.claude/claude.json` manually:
+Añade el servidor a tu configuración de Claude Code, apuntando `KB_MEMORY_ROOT` a tu bóveda en iCloud:
 
 ```json
 {
   "mcpServers": {
-    "simple-memory": {
+    "bovedia": {
       "command": "node",
-      "args": ["/Users/yourname/simple-memory-claude/server/index.js"]
+      "args": ["/Users/tunombre/BovedIA/server/index.js"],
+      "env": {
+        "KB_MEMORY_ROOT": "/Users/tunombre/Library/Mobile Documents/com~apple~CloudDocs/mi-boveda"
+      }
     }
   }
 }
 ```
 
-> **No `MEMORY_PATH` needed** — the server defaults to `~/Library/Mobile Documents/com~apple~CloudDocs/my-memory` on Mac.
-> If you named your vault folder differently, set the env var:
-> ```json
-> "env": { "MEMORY_PATH": "/Users/yourname/Library/Mobile Documents/com~apple~CloudDocs/my-vault" }
-> ```
+> En Mac conviene fijar `KB_MEMORY_ROOT` a la carpeta de iCloud. Si no defines ninguna variable, BovedIA usa `~/Documents/bovedia` por defecto (local, sin sincronizar).
 
 ---
 
-## Step 5 — Verify
+## Paso 5 — Verificar
 
-Restart Claude Code and run:
-
-```
-get_index
-```
-
-You should see the index of your vault. If you used the example vault, you'll see the sample notes.
+Reinicia Claude Code y pide leer `Inicio`, o ejecutar `get_index`. Deberías ver tu bóveda. Si usaste la de ejemplo, verás las notas de muestra.
 
 ---
 
-## Vault location
+## Dónde vive la bóveda
 
 ```
-~/Library/Mobile Documents/com~apple~CloudDocs/my-memory/
+~/Library/Mobile Documents/com~apple~CloudDocs/mi-boveda/
 ```
 
-This folder appears as **my-memory** in Finder under iCloud Drive.
+Esta carpeta aparece como **mi-boveda** en Finder, dentro de iCloud Drive.

@@ -9,41 +9,34 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 
-// ─── Vault root ────────────────────────────────────────────────────────────
-//
-// Set the MEMORY_PATH environment variable to point to your vault folder.
-// If not set, defaults to iCloud Drive on macOS.
-//
-// Examples:
-//   Mac  + iCloud          → (default, no env var needed)
-//   Mac  + Dropbox         → MEMORY_PATH=~/Dropbox/my-memory
-//   Windows + OneDrive     → MEMORY_PATH=C:\Users\name\OneDrive\my-memory
-//   Windows + Google Drive → MEMORY_PATH=C:\Users\name\Google Drive\My Drive\my-memory
-//   Linux + Dropbox        → MEMORY_PATH=~/Dropbox/my-memory
+// Raíz de la bóveda: la carpeta donde viven tus notas .md.
+// Configúrala con la variable de entorno KB_MEMORY_ROOT (o su alias MEMORY_PATH)
+// para apuntar a tu carpeta sincronizada en la nube (iCloud, OneDrive, Dropbox,
+// Google Drive) o a cualquier carpeta local. Acepta rutas con ~ y relativas.
+// Si no se define ninguna, usa ~/Documents/bovedia por defecto.
+const MEMORY_ROOT = (process.env.KB_MEMORY_ROOT || process.env.MEMORY_PATH)
+  ? path.resolve((process.env.KB_MEMORY_ROOT || process.env.MEMORY_PATH).replace(/^~/, os.homedir()))
+  : path.join(os.homedir(), 'Documents', 'bovedia');
 
-const MEMORY_ROOT = process.env.MEMORY_PATH
-  ? path.resolve(process.env.MEMORY_PATH.replace(/^~/, os.homedir()))
-  : path.join(
-      os.homedir(),
-      'Library',
-      'Mobile Documents',
-      'com~apple~CloudDocs',
-      'my-memory'
-    );
+// ─── Estructura de la bóveda ────────────────────────────────────────────────
+// La estructura de carpetas es libre: crea las categorías que tu trabajo pida.
+// El vault-example/ de este repo trae una estructura de referencia lista para
+// usar: el router "Inicio", la pirámide, el alma, y carpetas para proyectos,
+// clientes, conocimiento y referencias.
 
-// Reserved files — not treated as regular notes
+// Archivos reservados que no se tratan como notas
 const RESERVED = new Set(['HOME.md']);
 
-// AI author registered in the Markdown Annotations block (spec iainc/Markdown-Annotations v0.2).
-// `&` indicates AI authorship, `@` is reserved for humans, `*` for references.
+// Autor IA registrado en el bloque Markdown Annotations (spec iainc/Markdown-Annotations v0.2).
+// `&` indica autoría de IA, `@` se reserva para humanos, `*` para referencias.
 const CLAUDE_AUTHOR = { prefix: '&', name: process.env.KB_AUTHOR_NAME || 'Claude', identifier: process.env.KB_AUTHOR_EMAIL || 'noreply@anthropic.com' };
 
-// Feature flag: the Markdown Annotations block is only generated when the user
-// explicitly enables it with the KB_ENABLE_ANNOTATIONS=1 (or "true") environment
-// variable. Disabled by default so notes don't end up with extra content at
-// the bottom in editors that don't support the spec (most of them).
-// Users with iA Writer or other compatible editors can enable it to get
-// full authorship tracking inside notes.
+// Feature flag: el bloque Markdown Annotations solo se genera si el usuario
+// lo activa explícitamente con la variable de entorno KB_ENABLE_ANNOTATIONS=1
+// (o "true"). Por defecto está desactivado para no añadir contenido extra al
+// final de las notas en editores que no soporten la spec (la mayoría).
+// Quien use iA Writer u otro editor compatible con Markdown Annotations puede
+// activarlo y obtiene la trazabilidad de autoría completa.
 const ANNOTATIONS_ENABLED = (() => {
   const v = (process.env.KB_ENABLE_ANNOTATIONS || '').toLowerCase();
   return v === '1' || v === 'true' || v === 'yes' || v === 'on';
@@ -55,22 +48,22 @@ const ANNOTATIONS_ENABLED = (() => {
 // sobrevivan a cambios de codificación y a emojis/secuencias compuestas.
 const _graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
 
-// ─── Unicode normalization (NFC) ───────────────────────────────────────────
-// macOS/iCloud and some editors (iA Writer) may store text in DECOMPOSED form
-// (NFC vs NFD): "Versión" saved as "Versio" + a combining accent. If the file is
-// in NFD and the text arriving from the tool is in NFC (or the other way round),
-// literal comparisons (split/replace/includes) fail with "text not found" even
-// though both sides look identical. To prevent this we normalize to NFC at the
-// two boundaries: what is read from disk and what comes in as input arguments.
+// ─── Normalización Unicode (NFC) ───────────────────────────────────────────
+// macOS/iCloud y algunos editores (iA Writer) pueden guardar texto en forma
+// DESCOMPUESTA (NFC vs NFD): "Versión" como "Versio" + tilde combinante. Si el
+// archivo está en NFD y el texto que llega de la herramienta en NFC (o al revés),
+// las comparaciones literales (split/replace/includes) fallan con "no se encontró
+// el texto" aunque visualmente sean idénticos. Para evitarlo, normalizamos a NFC
+// en las dos fronteras: lo que se lee de disco y lo que entra como argumento.
 const nfc = (s) => (typeof s === 'string' ? s.normalize('NFC') : s);
 
-// Reads a note file from disk normalized to NFC. The single read entry point.
+// Lee un archivo de nota de disco normalizado a NFC. Único punto de lectura.
 function readNoteFile(filePath) {
   return fs.readFileSync(filePath, 'utf8').normalize('NFC');
 }
 
-// Normalizes to NFC every text value of a tool's arguments (strings and arrays
-// of strings). Idempotent and safe: NFC is the canonical form.
+// Normaliza a NFC todos los valores de texto de los argumentos de una tool
+// (strings y arrays de strings). Idempotente y seguro: NFC es la forma canónica.
 function normalizeArgs(args) {
   if (!args || typeof args !== 'object') return args;
   for (const k of Object.keys(args)) {
@@ -149,7 +142,7 @@ function graphemeSlice(text, startG, endG) {
 // iA Writer escribe en archivos en español). Tolera trailing whitespace (dos
 // espacios al final de línea, convención de la spec).
 function parseAnnotationBlock(blockText) {
-  // blockText empieza with `---\n` y acaba with `...\n` (o sin newline final).
+  // blockText empieza con `---\n` y acaba con `...\n` (o sin newline final).
   const lines = blockText.split('\n').map((l) => l.replace(/\s+$/, ''));
   // Buscar la línea de hash (primera que matchee Annotations o Anotaciones)
   const hashLineIdx = lines.findIndex((l) => /^(?:Annotations|Anotaciones):/.test(l));
@@ -182,7 +175,7 @@ function parseAnnotationBlock(blockText) {
 
 // Detecta si un cuerpo termina en un bloque Markdown Annotations y lo separa.
 // Devuelve { cleanBody, blockText } — blockText es el bloque crudo o null si no lo hay.
-// El bloque puede empezar with "Annotations:" (inglés) o "Anotaciones:" (español, iA Writer
+// El bloque puede empezar con "Annotations:" (inglés) o "Anotaciones:" (español, iA Writer
 // localizado). El cierre es la línea `...`.
 function stripAnnotationBlock(body) {
   const match = body.match(/\n+---\s*\n(?:Annotations|Anotaciones):[\s\S]*?\n\.\.\.\s*\n?$/);
@@ -195,7 +188,7 @@ function stripAnnotationBlock(body) {
 // ─── Markdown Annotations: manipulación de rangos ──────────────────────────
 
 // Los rangos del bloque están en offsets RELATIVOS AL ARCHIVO (incluyen frontmatter).
-// Internamente trabajamos with rangos RELATIVOS AL CUERPO para que las operaciones
+// Internamente trabajamos con rangos RELATIVOS AL CUERPO para que las operaciones
 // de edición no se vean afectadas por el tamaño del frontmatter.
 
 // Convierte rangos archivo-relativos a cuerpo-relativos.
@@ -206,7 +199,7 @@ function toBodyRanges(fileRanges, bodyOffset) {
   for (const r of fileRanges) {
     const start = r.start - bodyOffset;
     const end = start + r.length;
-    if (end <= 0) continue;          // rango entero in frontmatter, descartar
+    if (end <= 0) continue;          // rango entero en el frontmatter, descartar
     const clamped = { start: Math.max(0, start), length: end - Math.max(0, start) };
     if (clamped.length > 0) out.push(clamped);
   }
@@ -257,7 +250,7 @@ function clearRangeSegment(ranges, editStart, oldLength) {
       // Rango entero después del edit
       out.push({ ...r });
     } else {
-      // Rango cruza o se solapa with el edit: recortar
+      // Rango cruza o se solapa con el edit: recortar
       if (r.start < editStart) {
         out.push({ start: r.start, length: editStart - r.start });
       }
@@ -269,7 +262,7 @@ function clearRangeSegment(ranges, editStart, oldLength) {
   return out;
 }
 
-// Helpers a nivel de "autores with rangos" (no rangos sueltos).
+// Helpers a nivel de "autores con rangos" (no rangos sueltos).
 
 function shiftAuthorsRangesAfter(authors, fromOffset, delta) {
   return authors
@@ -348,7 +341,7 @@ function mergeAdjacentRanges(authors) {
 // `authors` = array de { prefix, name, identifier, ranges } donde los rangos están
 //   en grapheme offsets RELATIVOS AL ARCHIVO. El hash cubre todo el `text`.
 // Hash SHA-256 truncado a 20 caracteres (convención que usa iA Writer).
-// Cada línea de datos termina with dos espacios + newline (convención de la spec).
+// Cada línea de datos termina con dos espacios + newline (convención de la spec).
 function computeAnnotationBlock(text, authors) {
   const totalLength = countGraphemes(text);
   const hash = crypto.createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 20);
@@ -445,7 +438,7 @@ function findNote(name) {
   return searchDir(MEMORY_ROOT);
 }
 
-// Devuelve todas las notas with sus metadatos
+// Devuelve todas las notas con sus metadatos
 function getAllNotes() {
   const notes = [];
 
@@ -484,16 +477,16 @@ function getAllNotes() {
   return notes;
 }
 
-// ─── Note index cache (performance) ─────────────────────────────────────────
-// getAllNotes() scans and parses every file on disk; it is expensive and is
-// invoked on each read handler. We cache the result in memory.
-// Invalidation works two complementary ways:
-//  - On write: write handlers call invalidateCache() on success (the most
-//    reliable path: reflects changes made by the MCP itself instantly).
-//  - Short TTL (20s): the user may edit notes directly in their editor, outside
-//    the MCP. Without a TTL those external edits would not show up until the
-//    server restarts. With the TTL the cache expires on its own and is rebuilt
-//    from disk, picking up external changes within at most 20 seconds.
+// ─── Caché del índice de notas (rendimiento) ────────────────────────────────
+// getAllNotes() escanea y parsea todos los archivos del disco; es caro y se
+// invoca en cada handler de lectura. Cacheamos el resultado en memoria.
+// Invalidación por dos vías complementarias:
+//  - Por escritura: los handlers de escritura llaman invalidateCache() al
+//    terminar con éxito (la más fiable: refleja cambios del propio MCP al instante).
+//  - Por TTL corto (20 s): el usuario edita notas directamente en iA Writer,
+//    fuera del MCP. Sin TTL, esas ediciones externas no se verían hasta reiniciar
+//    el server. Con el TTL, la caché caduca sola y se reconstruye desde disco,
+//    recogiendo los cambios externos en como mucho 20 segundos.
 const CACHE_TTL_MS = 20000;
 let _cache = null;
 let _cacheTimestamp = 0;
@@ -557,7 +550,7 @@ function extractHashtags(body) {
   return [...new Set(matches.map((m) => m[1]))];
 }
 
-// Separa el body ofl bloque final de hashtags y/o footer de backlinks añadido por read_note.
+// Separa el cuerpo del bloque final de hashtags y/o footer de backlinks añadido por read_note.
 // Devuelve { mainBody, trailing } donde trailing puede contener hashtags + backlinks.
 function splitBodyAndTrailing(body) {
   const lines = body.split('\n');
@@ -566,7 +559,7 @@ function splitBodyAndTrailing(body) {
   while (lastIdx >= 0 && lines[lastIdx].trim() === '') lastIdx--;
 
   // Buscar hacia atrás una línea de hashtags al final del cuerpo
-  // (formato: línea que solo contains tokens #snake_case separados por espacios)
+  // (formato: línea que solo contiene tokens #snake_case separados por espacios)
   let hashtagLine = -1;
   for (let i = lastIdx; i >= 0 && i >= lastIdx - 4; i--) {
     const trimmed = lines[i].trim();
@@ -594,7 +587,7 @@ function splitBodyAndTrailing(body) {
 }
 
 // Extrae los autores del cuerpo a partir del contenido crudo del archivo.
-// Devuelve un array de { prefix, name, identifier, ranges } with rangos CUERPO-RELATIVOS.
+// Devuelve un array de { prefix, name, identifier, ranges } con rangos CUERPO-RELATIVOS.
 // Array vacío si no hay bloque de anotaciones, si el bloque es inválido,
 // o si la feature está desactivada.
 function extractBodyAuthorsFromRaw(rawContent) {
@@ -614,9 +607,9 @@ function extractBodyAuthorsFromRaw(rawContent) {
     .filter((a) => a.ranges.length > 0);
 }
 
-// After deleting or moving a note, checks if the source folder is empty and,
-// if so, removes it. Climbs recursively: if the parent is also empty, removes
-// it as well. Never touches MEMORY_ROOT or anything outside it.
+// Tras borrar o mover una nota, comprueba si la carpeta origen ha quedado vacía
+// y, en ese caso, la elimina. Sube recursivamente: si el padre también queda
+// vacío, lo elimina también. Nunca toca MEMORY_ROOT ni nada fuera de él.
 function cleanupEmptyAncestors(dir) {
   try {
     const root = path.resolve(MEMORY_ROOT);
@@ -624,10 +617,10 @@ function cleanupEmptyAncestors(dir) {
     while (current.startsWith(root + path.sep) && current !== root) {
       let entries;
       try { entries = fs.readdirSync(current); } catch { return; }
-      // Ignore typical macOS hidden files (.DS_Store) when checking emptiness
+      // Ignorar archivos ocultos típicos de macOS (.DS_Store) al evaluar vacío
       const visible = entries.filter((e) => e !== '.DS_Store');
       if (visible.length > 0) return;
-      // Remove any residual .DS_Store then the folder itself
+      // Borrar .DS_Store residual si lo hubiera y luego la carpeta
       for (const e of entries) {
         try { fs.unlinkSync(path.join(current, e)); } catch {}
       }
@@ -635,15 +628,16 @@ function cleanupEmptyAncestors(dir) {
       current = path.dirname(current);
     }
   } catch {
-    // Silent: cleanup must not break the main operation
+    // Cualquier error silencioso: la limpieza no debe romper la operación principal
   }
 }
 
-// Loads a note from disk and returns { filePath, content, frontmatter, body, bodyAuthors }.
-// - `body`: content without frontmatter, without the Markdown Annotations block,
-//   trimmed of leading/trailing whitespace. bodyAuthors offsets align with this exact body.
-// - `bodyAuthors`: authors with BODY-RELATIVE ranges (empty if no block).
-// - `content`: full file content as on disk.
+// Lee una nota desde disco y devuelve { filePath, content, frontmatter, body, bodyAuthors }.
+// - `body`: cuerpo sin frontmatter, sin bloque Markdown Annotations, sin whitespace
+//   al inicio ni al final (trimmed). Los offsets de bodyAuthors están alineados con
+//   este `body` exacto.
+// - `bodyAuthors`: autores con rangos CUERPO-RELATIVOS (vacío si no hay bloque).
+// - `content`: archivo completo tal cual está en disco.
 function loadNote(name) {
   const reservedNames = { HOME: 'HOME.md' };
   const reservedFile = reservedNames[name?.toUpperCase?.()];
@@ -663,7 +657,7 @@ function loadNote(name) {
 // - Renueva el campo `updated` del frontmatter a hoy, salvo que se pase
 //   `preserveUpdated: true` (caso migración masiva).
 // - Regenera siempre el bloque Markdown Annotations al final.
-// - `bodyAuthors` (opcional): array de autores with rangos CUERPO-RELATIVOS. Si se
+// - `bodyAuthors` (opcional): array de autores con rangos CUERPO-RELATIVOS. Si se
 //   omite o se pasa null, todo el cuerpo se atribuye a Claude (caso write_note inicial).
 // - Si se pasa array vacío, NINGUNA atribución se persiste (todo cuerpo queda sin
 //   atribuir, comportamiento improbable en la práctica).
@@ -761,7 +755,10 @@ function findSection(body, title) {
 // ─── Servidor MCP ──────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'simple-memory-claude', version: '1.5.1' },
+  // Nombre con el que el servidor se anuncia. Por defecto 'bovedia'; se puede
+  // fijar con KB_SERVER_NAME para conservar un identificador propio en una
+  // instalación ya existente sin cambiar nada del flujo de trabajo diario.
+  { name: process.env.KB_SERVER_NAME || 'bovedia', version: '2.0.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -770,95 +767,95 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ── Bloque base: lectura ──────────────────────────────────────────────
     {
       name: 'read_note',
-      description: 'Read the full content of a note. Searches across all categories.',
+      description: 'Leer el contenido completo de una nota. Busca en todas las categorías.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Note name without .md extension' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nota sin extensión .md' } },
         required: ['name'],
       },
     },
     {
       name: 'search_notes',
-      description: 'Search notes by free text. With multiple words, finds notes containing ALL terms (AND logic). Searches in titles, content and tags.',
+      description: 'Buscar notas por texto libre. Con múltiples palabras busca notas que contengan TODAS (lógica AND). Busca en títulos, contenido y tags.',
       inputSchema: {
         type: 'object',
-        properties: { query: { type: 'string', description: 'Search term' } },
+        properties: { query: { type: 'string', description: 'Término de búsqueda' } },
         required: ['query'],
       },
     },
     {
       name: 'list_notes',
-      description: 'List notes with their metadata, optionally filtered by category and/or tag. The category filter is RECURSIVE: it includes the given category and all of its subfolders. For example, category "clients" returns the notes directly under clients/ AND every note in subfolders such as "clients/acme". To narrow down to a specific subfolder, use its full category (e.g. "clients/acme"). To see the full folder structure of the vault, use get_index.',
+      description: 'Listar notas con sus metadatos, filtradas opcionalmente por categoría y/o tag. El filtro de categoría es RECURSIVO: incluye la categoría indicada y todas sus subcarpetas. Por ejemplo, category "conocimiento" devuelve las notas sueltas en su raíz Y todas las de subcarpetas como "conocimiento/problemas-resueltos". Para ver la estructura completa de carpetas, usa get_index.',
       inputSchema: {
         type: 'object',
         properties: {
-          category: { type: 'string', description: 'Category to filter by (recursive): returns notes in that category and all of its subfolders. Use the root category (e.g. "clients") for the whole tree, or a full subcategory (e.g. "clients/acme") to narrow down to a single subfolder.' },
-          tag: { type: 'string', description: 'Optional tag to filter notes containing that tag' },
+          category: { type: 'string', description: 'Categoría para filtrar (recursiva): devuelve las notas de esa categoría y de todas sus subcarpetas. Usa la categoría raíz (p. ej. "conocimiento") para todo el árbol, o una subcategoría completa (p. ej. "conocimiento/problemas-resueltos") para acotar a una subcarpeta.' },
+          tag: { type: 'string', description: 'Tag opcional para filtrar notas que contengan ese tag' },
         },
       },
     },
     {
       name: 'get_index',
-      description: 'Get the complete index of the knowledge base. Useful to get oriented at the start of a session.',
+      description: 'Obtener el índice completo de la base de conocimiento. Útil para orientarse al inicio de una sesión.',
       inputSchema: { type: 'object', properties: {} },
     },
 
     // ── Bloque base: escritura ────────────────────────────────────────────
     {
       name: 'write_note',
-      description: 'Create, save, write or update a note in the knowledge base (the vault). Write operation — use it when you want to save new content or overwrite an existing one, including notes in the inbox folder. If the note already exists, it is fully replaced (whole body overwritten). For small edits without resending everything, prefer edit_note, append_to_note, prepend_to_note, update_section or insert_after_section. Use "name" to update an existing note by its real slug (useful when the new title differs from the file name).',
+      description: 'Crear, guardar, anotar, añadir o actualizar una nota en la base de conocimiento (la bóveda). Operación de escritura — úsala cuando quieras guardar contenido nuevo o sobrescribir uno existente, incluyendo notas en la carpeta bandeja-de-entrada. Si la nota ya existe, la actualiza completa (sobrescribe el cuerpo entero). Para retoques puntuales sin reenviar todo, prefiere edit_note, append_to_note, prepend_to_note, update_section o insert_after_section. Usa "name" para actualizar una nota existente por su slug real (útil cuando el título nuevo difiere del nombre de archivo).',
       inputSchema: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Note title' },
-          content: { type: 'string', description: 'Markdown content, excluding frontmatter and the h1 title' },
+          title: { type: 'string', description: 'Título de la nota' },
+          content: { type: 'string', description: 'Contenido en Markdown, sin incluir frontmatter ni el título h1' },
           category: {
             type: 'string',
-            description: 'Subfolder where the note will be saved. Use any folder name that fits your taxonomy (e.g. clients, projects, references, inbox). The folder is created automatically if it does not exist.',
+            description: 'Subcarpeta donde guardar la nota (p. ej. "proyectos", "clientes/nombre-cliente" o "conocimiento/problemas-resueltos"). La estructura de carpetas es libre: usa las categorías que tu trabajo pida. Para ver las que ya existen, usa get_index.',
           },
-          tags: { type: 'array', items: { type: 'string' }, description: 'List of tags to classify the note' },
-          name: { type: 'string', description: 'Slug of the existing file to update (without .md extension). Use it when the new title differs from the current file name. If omitted, the slug is auto-generated from the title.' },
+          tags: { type: 'array', items: { type: 'string' }, description: 'Lista de tags para clasificar la nota' },
+          name: { type: 'string', description: 'Slug del archivo existente a actualizar (sin extensión .md). Úsalo cuando el título no coincide con el nombre de archivo actual. Si se omite, el slug se genera automáticamente desde el título.' },
         },
         required: ['title', 'content', 'category'],
       },
     },
     {
       name: 'delete_note',
-      description: 'Delete or remove a note from the knowledge base. Warns if other notes reference it via wikilinks.',
+      description: 'Eliminar, borrar o quitar una nota de la base de conocimiento. Avisa si otras notas la referencian con wikilinks.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Note name without .md extension' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nota sin extensión .md' } },
         required: ['name'],
       },
     },
     {
       name: 'create_category',
-      description: 'Create a new subfolder or category in the knowledge base. Use it before saving the first note in a category that does not exist yet.',
+      description: 'Crear una nueva subcarpeta o categoría en la base de conocimiento. Úsala antes de guardar la primera nota en una categoría que aún no exista.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Name of the new category' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nueva categoría' } },
         required: ['name'],
       },
     },
     {
       name: 'move_note',
-      description: 'Move, rename or relocate a note — change its category and/or title. Automatically updates wikilinks in other notes that reference it.',
+      description: 'Mover, renombrar o reubicar una nota — cambiarla de categoría y/o cambiarle el título. Actualiza automáticamente los wikilinks de otras notas que la referencien.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Current note name (without .md extension)' },
-          new_category: { type: 'string', description: 'New target category/folder (optional)' },
-          new_title: { type: 'string', description: 'New title for the note, if renaming (optional)' },
+          name: { type: 'string', description: 'Nombre actual de la nota (sin extensión .md)' },
+          new_category: { type: 'string', description: 'Nueva categoría/carpeta destino (opcional)' },
+          new_title: { type: 'string', description: 'Nuevo título para la nota, si se quiere renombrar (opcional)' },
         },
         required: ['name'],
       },
     },
     {
       name: 'delete_category',
-      description: 'Delete an empty category/subfolder. Only works if the folder has no notes inside.',
+      description: 'Eliminar o borrar una categoría/subcarpeta vacía. Solo funciona si la carpeta no tiene notas dentro.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Name of the category to remove' } },
+        properties: { name: { type: 'string', description: 'Nombre de la categoría a eliminar' } },
         required: ['name'],
       },
     },
@@ -866,63 +863,63 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ── Bloque 1: edición puntual ────────────────────────────────────────
     {
       name: 'edit_note',
-      description: 'Edit or change a specific portion of a note via exact find/replace. Replaces old_text with new_text within the note body without resending the whole file. Fails if old_text does not appear or appears more than once (ambiguity). The most efficient operation for small corrections: a word, a line, a table entry. To append content at the end use append_to_note; to replace a whole section use update_section.',
+      description: 'Editar, modificar, retocar o cambiar una porción concreta de una nota mediante find/replace exacto. Reemplaza old_text por new_text dentro del cuerpo de la nota sin reenviar el archivo entero. Falla si old_text no aparece o aparece más de una vez (ambigüedad). Es la operación más eficiente para correcciones puntuales: una palabra, una línea, una entrada de tabla. Para añadir contenido al final usa append_to_note; para reemplazar una sección entera usa update_section.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Note name without .md extension' },
-          old_text: { type: 'string', description: 'Exact text to replace. Must be unique in the note — include enough context if a short string could appear multiple times' },
-          new_text: { type: 'string', description: 'New text replacing old_text' },
-          replace_all: { type: 'boolean', description: 'If true, replaces all occurrences instead of failing on ambiguity. Default false' },
+          name: { type: 'string', description: 'Nombre de la nota sin extensión .md' },
+          old_text: { type: 'string', description: 'Texto exacto a reemplazar. Debe ser único en la nota — incluye contexto suficiente si la cadena corta podría aparecer varias veces' },
+          new_text: { type: 'string', description: 'Texto nuevo que sustituye a old_text' },
+          replace_all: { type: 'boolean', description: 'Si es true, reemplaza todas las ocurrencias en lugar de fallar por ambigüedad. Por defecto false' },
         },
         required: ['name', 'old_text', 'new_text'],
       },
     },
     {
       name: 'append_to_note',
-      description: 'Append or concatenate content at the end of a note body without touching the rest. If the note ends in a line of `#snake_case` hashtags, the new content is inserted before the hashtags (preserving the vault convention). Ideal for inbox notes, growing lists and logs.',
+      description: 'Añadir, agregar, anexar o concatenar contenido al final del cuerpo de una nota sin tocar el resto. Si la nota termina en una línea de hashtags `#snake_case`, el contenido se inserta antes de los hashtags (preservando la convención de la bóveda). Ideal para notas-bandeja, listas crecientes y logs.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Note name without .md extension' },
-          content: { type: 'string', description: 'Markdown content to append at the end' },
+          name: { type: 'string', description: 'Nombre de la nota sin extensión .md' },
+          content: { type: 'string', description: 'Contenido Markdown a añadir al final' },
         },
         required: ['name', 'content'],
       },
     },
     {
       name: 'prepend_to_note',
-      description: 'Insert or prepend content at the beginning of a note body (right after the h1 title, before the rest of the content). Useful for reverse-log style entries where the newest goes on top.',
+      description: 'Añadir, insertar o anteponer contenido al principio del cuerpo de una nota (justo después del título h1, antes del resto del contenido). Útil para entradas tipo log invertido donde lo más nuevo va arriba.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Note name without .md extension' },
-          content: { type: 'string', description: 'Markdown content to insert at the beginning' },
+          name: { type: 'string', description: 'Nombre de la nota sin extensión .md' },
+          content: { type: 'string', description: 'Contenido Markdown a insertar al inicio' },
         },
         required: ['name', 'content'],
       },
     },
     {
       name: 'update_section',
-      description: 'Replace or rewrite an entire Markdown section of a note, identified by the exact title of its heading (without the `#`). The section spans from its heading to the next heading of the same level or higher. Keeps the original heading, replaces only the content between headings. Markdown-aware: ideal to regenerate large tables, lists or long paragraphs without touching the rest of the document.',
+      description: 'Reemplazar, sustituir o reescribir una sección Markdown entera de una nota, identificada por el título exacto de su encabezado (sin los `#`). La sección abarca desde su encabezado hasta el siguiente encabezado del mismo nivel o superior. Conserva el encabezado original, sustituye solo el contenido entre encabezados. Es markdown-aware: ideal para regenerar tablas grandes, listas o párrafos largos sin tocar el resto del documento.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Note name without .md extension' },
-          section_title: { type: 'string', description: 'Exact heading title, without the leading # (e.g. "Marketing")' },
-          new_content: { type: 'string', description: 'New section content, excluding the heading (which is preserved)' },
+          name: { type: 'string', description: 'Nombre de la nota sin extensión .md' },
+          section_title: { type: 'string', description: 'Título exacto del encabezado, sin los # iniciales (ej. "Marketing y publicidad")' },
+          new_content: { type: 'string', description: 'Nuevo contenido de la sección, sin incluir el encabezado (que se conserva)' },
         },
         required: ['name', 'section_title', 'new_content'],
       },
     },
     {
       name: 'insert_after_section',
-      description: 'Insert a new Markdown section right after another existing section, identified by its title. The new section includes its own heading inside new_content. Useful to append entries in order to an inventory without rewriting the whole file.',
+      description: 'Insertar, añadir o intercalar una nueva sección Markdown justo después de otra sección existente, identificada por su título. La sección nueva incluye su propio encabezado dentro de new_content. Útil para añadir entradas en orden a un inventario sin reescribir todo el archivo.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Note name without .md extension' },
-          after_section_title: { type: 'string', description: 'Exact title of the section after which the new content is inserted' },
+          name: { type: 'string', description: 'Nombre de la nota sin extensión .md' },
+          after_section_title: { type: 'string', description: 'Título exacto de la sección tras la cual se inserta el contenido nuevo' },
           new_content: { type: 'string', description: 'Bloque Markdown nuevo, normalmente empezando por su propio encabezado (ej. "### Adle\\n\\nDescripción...")' },
         },
         required: ['name', 'after_section_title', 'new_content'],
@@ -932,50 +929,50 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ── Bloque 2: wikilinks y tags ───────────────────────────────────────
     {
       name: 'list_broken_links',
-      description: 'List all broken wikilinks in the vault (references [[slug]] pointing to notes that do not exist), grouped by the note that contains them. Maintenance operation: run it periodically to clean the vault.',
+      description: 'Listar todos los wikilinks rotos de la bóveda (referencias [[slug]] que apuntan a notas inexistentes), agrupados por la nota que los contiene. Operación de mantenimiento: úsala periódicamente para limpiar la bóveda.',
       inputSchema: { type: 'object', properties: {} },
     },
     {
       name: 'find_backlinks',
-      description: 'Return only the backlinks of a note (which notes reference it), without loading its content. Faster and cheaper in tokens than read_note when you only want backlinks.',
+      description: 'Devolver únicamente los backlinks de una nota (qué notas la referencian), sin cargar su contenido. Más rápido y económico en tokens que read_note cuando solo se quieren los backlinks.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Note name without .md extension' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nota sin extensión .md' } },
         required: ['name'],
       },
     },
     {
       name: 'find_orphans',
-      description: 'List orphan notes: notes with no backlinks and no outlinks (they do not link to any note and no one links to them). Useful to audit isolated notes that should probably be integrated or removed.',
+      description: 'Listar notas huérfanas: notas que no tienen backlinks ni outlinks (no enlazan a ninguna nota ni son enlazadas por nadie). Útil para auditar notas aisladas que probablemente deberían integrarse o eliminarse.',
       inputSchema: { type: 'object', properties: {} },
     },
     {
       name: 'rename_wikilink',
-      description: 'Rename or globally replace a wikilink across all notes that reference it. Useful when a concept has been consolidated and all references [[old_slug]] must redirect to [[new_slug]] without touching the source or target notes. Does not move files — use move_note if you want to rename the note itself.',
+      description: 'Renombrar, cambiar o sustituir globalmente un wikilink en todas las notas que lo referencian. Útil cuando se ha consolidado un concepto y hay que redirigir todas las referencias [[old_slug]] a [[new_slug]] sin tocar las notas origen ni destino. No mueve archivos — usa move_note si lo que quieres es renombrar la propia nota.',
       inputSchema: {
         type: 'object',
         properties: {
-          old_slug: { type: 'string', description: 'Old wikilink to replace (without brackets)' },
-          new_slug: { type: 'string', description: 'New wikilink that replaces it (without brackets)' },
+          old_slug: { type: 'string', description: 'Wikilink antiguo a sustituir (sin los corchetes)' },
+          new_slug: { type: 'string', description: 'Wikilink nuevo que lo reemplaza (sin los corchetes)' },
         },
         required: ['old_slug', 'new_slug'],
       },
     },
     {
       name: 'list_tags',
-      description: 'List all `#snake_case` hashtags present in the body of notes, with the count of notes each appears in. Useful to audit the taxonomy, detect variants and keep consistency.',
+      description: 'Listar todos los hashtags `#snake_case` presentes en el cuerpo de las notas, con el número de notas en que aparece cada uno. Útil para auditar la taxonomía, detectar variantes y mantener consistencia.',
       inputSchema: { type: 'object', properties: {} },
     },
     {
       name: 'update_frontmatter',
-      description: 'Update or change specific fields of a note YAML frontmatter (title, category, tags, created) without touching the body. The updated field is auto-renewed. To change category use move_note (keeps wikilinks); this tool only edits the YAML in place without moving files.',
+      description: 'Actualizar, modificar o cambiar campos concretos del frontmatter YAML de una nota (title, category, tags, created) sin tocar el cuerpo. El campo updated se renueva automáticamente. Para mover de categoría usa move_note (mantiene wikilinks); este tool solo edita el YAML in situ sin mover archivos.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Note name without .md extension' },
+          name: { type: 'string', description: 'Nombre de la nota sin extensión .md' },
           fields: {
             type: 'object',
-            description: 'Object with fields to update. Valid keys: title, category, tags (array), created. updated is ignored — always set to today.',
+            description: 'Objeto con los campos a actualizar. Claves válidas: title, category, tags (array), created. updated se ignora — siempre se pone a hoy.',
           },
         },
         required: ['name', 'fields'],
@@ -985,40 +982,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ── Bloque 3: lectura económica ──────────────────────────────────────
     {
       name: 'peek_note',
-      description: 'Quick peek at a note: returns only frontmatter + first paragraph of the body. Saves tokens when you only need to check the category, tags or what the note is about before deciding whether to read it in full.',
+      description: 'Echar un vistazo rápido a una nota: devuelve solo frontmatter + primer párrafo del cuerpo. Ahorra tokens cuando solo se quiere comprobar la categoría, tags o de qué trata la nota antes de decidir si leerla entera.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Note name without .md extension' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nota sin extensión .md' } },
         required: ['name'],
       },
     },
     {
       name: 'read_section',
-      description: 'Read only one Markdown section of a note, identified by the exact title of its heading. Returns from that heading up to the next heading of the same level or higher. Ideal for long notes (inventories, snapshots) when only a part is of interest.',
+      description: 'Leer únicamente una sección Markdown de una nota, identificada por el título exacto de su encabezado. Devuelve desde ese encabezado hasta el siguiente del mismo nivel o superior. Ideal para notas largas (inventarios, capturas) cuando solo interesa una parte.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Note name without .md extension' },
-          section_title: { type: 'string', description: 'Exact heading title, without the leading #' },
+          name: { type: 'string', description: 'Nombre de la nota sin extensión .md' },
+          section_title: { type: 'string', description: 'Título exacto del encabezado, sin los # iniciales' },
         },
         required: ['name', 'section_title'],
       },
     },
     {
       name: 'read_frontmatter',
-      description: 'Read only the YAML frontmatter of a note, without the body. Useful for quick validations or when only metadata is needed.',
+      description: 'Leer únicamente el frontmatter YAML de una nota, sin el cuerpo. Útil para validaciones rápidas o cuando solo se necesitan los metadatos.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Note name without .md extension' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nota sin extensión .md' } },
         required: ['name'],
       },
     },
     {
       name: 'read_authorship',
-      description: 'Query or audit the authorship of a note body: which authors wrote which ranges of the text. Returns a compact summary with each author, their ranges in grapheme indexes (relative to the body), the percentage they cover and a snippet of each range. Useful to audit who wrote what when a note has been edited by multiple hands. Requires KB_ENABLE_ANNOTATIONS=1.',
+      description: 'Consultar, auditar o revisar la autoría del cuerpo de una nota: qué autores escribieron qué rangos del texto. Devuelve un resumen compacto con cada autor, sus rangos en grapheme indexes (relativos al cuerpo), el porcentaje del cuerpo que cubren y un extracto de cada rango. Útil para auditar quién escribió qué cuando la nota se ha ido editando a varias manos.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Note name without .md extension' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nota sin extensión .md' } },
         required: ['name'],
       },
     },
@@ -1026,54 +1023,54 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ── Bloque 4: mantenimiento ──────────────────────────────────────────
     {
       name: 'recently_updated',
-      description: 'List notes modified recently, within the last N days (default 7). Useful to recover context on what has been touched recently without reading the whole vault.',
+      description: 'Listar notas modificadas recientemente, en los últimos N días (por defecto 7). Útil para retomar contexto de qué se ha tocado últimamente sin leer toda la bóveda.',
       inputSchema: {
         type: 'object',
         properties: {
-          days: { type: 'number', description: 'Number of days back. Default 7' },
+          days: { type: 'number', description: 'Número de días hacia atrás. Por defecto 7' },
         },
       },
     },
     {
       name: 'move_category',
-      description: 'Move or rename a whole category/folder with all its notes inside. Updates the category field of each note frontmatter. More efficient than moving them one by one. Does not update wikilinks since slugs do not change.',
+      description: 'Mover, renombrar o reubicar una categoría/carpeta entera con todas sus notas dentro. Actualiza el campo category del frontmatter de cada nota. Más eficiente que mover una a una. No actualiza wikilinks porque los slugs no cambian.',
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'Current category (can be nested like "parent/child")' },
-          new_name: { type: 'string', description: 'New category path' },
+          name: { type: 'string', description: 'Categoría actual (puede ser anidada como "conocimiento/problemas-resueltos")' },
+          new_name: { type: 'string', description: 'Nueva ruta de categoría' },
         },
         required: ['name', 'new_name'],
       },
     },
     {
       name: 'validate_note',
-      description: 'Validate or audit the structure of a note per the vault protocol: complete frontmatter (title, category, created, updated), presence of a "See also" section, presence of `#snake_case` hashtags at the end, and non-broken wikilinks. Returns a report with the issues found.',
+      description: 'Validar, comprobar o auditar la estructura de una nota según el protocolo de la bóveda: frontmatter completo (title, category, created, updated), presencia de sección "Ver también", presencia de hashtags `#snake_case` al final, y wikilinks no rotos. Devuelve un reporte con los problemas detectados.',
       inputSchema: {
         type: 'object',
-        properties: { name: { type: 'string', description: 'Note name without .md extension' } },
+        properties: { name: { type: 'string', description: 'Nombre de la nota sin extensión .md' } },
         required: ['name'],
       },
     },
     {
       name: 'bulk_move',
-      description: 'Move several notes at once to the same target category. Processes the slug array in a single call. Useful when processing the inbox when several notes go to the same folder. Does not rename — use move_note one by one for that.',
+      description: 'Mover, reubicar o desplazar varias notas a la vez a una misma categoría destino. Procesa el array de slugs en una sola llamada. Útil al procesar la bandeja de entrada cuando hay varias notas para la misma carpeta. No renombra — para renombrar usa move_note una a una.',
       inputSchema: {
         type: 'object',
         properties: {
-          names: { type: 'array', items: { type: 'string' }, description: 'List of slugs (without .md extension) to move' },
-          new_category: { type: 'string', description: 'Target category for all notes' },
+          names: { type: 'array', items: { type: 'string' }, description: 'Lista de slugs (sin extensión .md) a mover' },
+          new_category: { type: 'string', description: 'Categoría destino para todas las notas' },
         },
         required: ['names', 'new_category'],
       },
     },
     {
       name: 'migrate_annotations',
-      description: 'One-shot operation: add the Markdown Annotations block to ALL existing notes that do not have one yet, attributing the whole body to Claude. Notes that already have a block are skipped (idempotent). Preserves the updated field of each note. Defaults to dry_run mode to show what it would do without writing anything; with dry_run=false runs the real migration. Requires KB_ENABLE_ANNOTATIONS=1.',
+      description: 'Operación one-shot: añadir, anotar o aplicar el bloque Markdown Annotations a TODAS las notas existentes que aún no lo tengan, atribuyendo todo el cuerpo a Claude. Las notas que ya tienen bloque se saltan (idempotencia). Preserva el campo updated de cada nota. Por defecto corre en modo dry_run para mostrar qué haría sin tocar nada; con dry_run=false ejecuta la migración real.',
       inputSchema: {
         type: 'object',
         properties: {
-          dry_run: { type: 'boolean', description: 'If true (default), does not write anything and returns a report of which notes would be migrated. If false, runs the real migration.' },
+          dry_run: { type: 'boolean', description: 'Si true (por defecto), no escribe nada y devuelve un informe de qué notas se migrarían. Si false, ejecuta la migración real.' },
         },
       },
     },
@@ -1084,25 +1081,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-
-  // Normalize all input arguments to NFC so comparisons against on-disk text
-  // (also read as NFC) never fail due to NFC/NFD mismatches.
+  // Normalizar a NFC todo argumento de texto: garantiza que las comparaciones
+  // con el contenido de disco (también normalizado a NFC) casen siempre.
   normalizeArgs(args);
 
   try {
-    // ── Write-only-inbox mode — hard lock for untrusted/local assistants ──
-    // Canonical variable: KB_WRITE_ONLY_INBOX ('1' or 'true'). Backward
-    // compatibility with the old KB_INBOX_ONLY is kept: if it is still defined,
-    // it is treated as equivalent so existing installs do not break.
+    // ── Modo escritura-solo-bandeja — candado DURO para asistentes locales ──
+    // Variable canónica: KB_WRITE_ONLY_INBOX ('1' o 'true'). Se mantiene la
+    // compatibilidad con la antigua KB_INBOX_ONLY: si sigue definida, se trata
+    // como equivalente para no romper instalaciones que la usen.
     //
-    // Model (when the env is active):
-    //  - READ: never blocked.
-    //  - WRITE: only allowed in the inbox folder. If the target (or the note's
-    //    current category) is not the inbox, it is REJECTED with a clear message
-    //    (it is NOT silently redirected).
-    //  - ADMIN (create/delete/move categories, rename wikilinks globally,
-    //    migrate annotations): always blocked under this env.
-    // Without the env: default behavior = full access (does not enter here).
+    // Modelo (cuando la env está activa):
+    //  - LECTURA: nunca se bloquea.
+    //  - ESCRITURA: solo permitida en la categoría 'bandeja-de-entrada'. Si el
+    //    destino (o la categoría actual de la nota) no es bandeja-de-entrada, se
+    //    RECHAZA con un mensaje claro (NO se redirige silenciosamente).
+    //  - ADMIN (crear/borrar/mover categorías, renombrar wikilinks globalmente,
+    //    migrar anotaciones): siempre bloqueado bajo esta env.
+    // Sin la env: comportamiento por defecto = acceso total (no entra aquí).
     const WRITE_ONLY_INBOX = (() => {
       const w = (process.env.KB_WRITE_ONLY_INBOX || '').toLowerCase();
       const legacy = (process.env.KB_INBOX_ONLY || '').toLowerCase();
@@ -1111,37 +1107,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     })();
 
     if (WRITE_ONLY_INBOX) {
-      const INBOX = process.env.KB_INBOX_FOLDER || 'inbox';
+      const INBOX = 'bandeja-de-entrada';
 
-      // ADMIN: always blocked.
+      // ADMIN: siempre bloqueado.
       const ADMIN = new Set(['create_category', 'delete_category', 'move_category', 'rename_wikilink', 'migrate_annotations']);
       if (ADMIN.has(name)) {
-        return { content: [{ type: 'text', text: `Write-only-inbox mode active: admin operations (${name}) are blocked. You can only read notes and write in the "${INBOX}" folder.` }], isError: true };
+        return { content: [{ type: 'text', text: `Modo escritura-solo-bandeja activo: las operaciones de administración (${name}) están bloqueadas. Solo puedes leer notas y escribir en la carpeta ${INBOX}.` }], isError: true };
       }
 
-      // write_note: only if the target category is the inbox.
+      // write_note: solo si la categoría destino es la bandeja.
       if (name === 'write_note' && args.category !== INBOX) {
-        return { content: [{ type: 'text', text: `You can only write in "${INBOX}". The given category ("${args.category}") is not allowed in write-only-inbox mode.` }], isError: true };
+        return { content: [{ type: 'text', text: `Solo puedes escribir en ${INBOX}. La categoría indicada ("${args.category}") no está permitida en modo escritura-solo-bandeja.` }], isError: true };
       }
 
-      // Writing over an existing note: reject if its current category is not the inbox.
+      // Escritura sobre una nota existente: rechazar si su categoría actual no es la bandeja.
       const WRITE_ON_EXISTING = new Set(['edit_note', 'append_to_note', 'prepend_to_note', 'update_section', 'insert_after_section', 'update_frontmatter', 'delete_note']);
       if (WRITE_ON_EXISTING.has(name)) {
         const existing = loadNote(args.name);
         if (!existing) {
-          return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+          return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
         }
         if (existing.frontmatter.category !== INBOX) {
-          return { content: [{ type: 'text', text: `Write-only-inbox mode active: note "${args.name}" is in "${existing.frontmatter.category || 'root'}", not in "${INBOX}". You can only modify notes that are in the inbox folder.` }], isError: true };
+          return { content: [{ type: 'text', text: `Modo escritura-solo-bandeja activo: la nota "${args.name}" está en "${existing.frontmatter.category || 'raiz'}", no en ${INBOX}. Solo puedes modificar notas que estén en la bandeja de entrada.` }], isError: true };
         }
       }
 
-      // Moving notes: only if the target is the inbox.
+      // Mover notas: solo si el destino es la bandeja.
       if ((name === 'move_note' || name === 'bulk_move') && args.new_category !== INBOX) {
-        return { content: [{ type: 'text', text: `Write-only-inbox mode active: you can only move notes to "${INBOX}". The given target ("${args.new_category || 'none'}") is not allowed.` }], isError: true };
+        return { content: [{ type: 'text', text: `Modo escritura-solo-bandeja activo: solo puedes mover notas a ${INBOX}. Destino indicado ("${args.new_category || 'ninguno'}") no permitido.` }], isError: true };
       }
     }
-
     // ── write_note ──────────────────────────────────────────────────────
     if (name === 'write_note') {
       const slug = args.name ? args.name : slugify(args.title);
@@ -1162,7 +1157,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         created = frontmatter.created || today();
 
         // Auto-protección: si la nota existente tiene autoría humana (cualquier
-        // autor with prefijo `@`), abortar la sobrescritura para no destruirla.
+        // autor con prefijo `@`), abortar la sobrescritura para no destruirla.
         // El usuario debe usar edit_note / update_section / append_to_note para
         // modificar notas en su destino final donde él haya escrito.
         const existingAuthors = extractBodyAuthorsFromRaw(existing);
@@ -1176,19 +1171,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return {
             content: [{
               type: 'text',
-              text: `write_note BLOCKED: note "${slug}" contains ${totalHumanChars} characters of human authorship (${who}). Overwriting would erase that attribution and lose track of who wrote what. Use edit_note, append_to_note, prepend_to_note, update_section or insert_after_section to edit while keeping authorship.`,
+              text: `write_note BLOQUEADO: la nota "${slug}" contiene ${totalHumanChars} caracteres de autoría humana (${who}). Sobrescribir borraría esa atribución y se perdería la trazabilidad de qué escribió cada uno. Usa edit_note, append_to_note, prepend_to_note, update_section o insert_after_section para editar manteniendo la autoría.`,
             }],
             isError: true,
           };
         }
       }
 
-      // Defensive cleanup: the server already adds the frontmatter and the H1
-      // title. If the received content includes its own frontmatter or a leading
-      // H1 (some assistants add it following older templates), strip them so they
-      // are not duplicated in the body. Keeps all clients producing the same structure.
+      // Limpieza defensiva: el servidor ya añade el frontmatter y el H1 del
+      // título. Si el content recibido incluye su propio frontmatter o un H1
+      // al inicio (algunos asistentes lo añaden siguiendo plantillas antiguas),
+      // se eliminan para no duplicarlos en el cuerpo. Así todos los clientes
+      // (claude.ai, IA local, etc.) producen la misma estructura.
       const stripLeadingMeta = (raw) => {
         let c = (raw || '').replace(/^﻿/, '').replace(/^\s+/, '');
+        // Quitar un bloque frontmatter YAML inicial (--- ... ---)
         if (c.startsWith('---')) {
           const end = c.indexOf('\n---', 3);
           if (end !== -1) {
@@ -1196,12 +1193,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             c = (after !== -1 ? c.slice(after + 1) : '').replace(/^\s+/, '');
           }
         }
+        // Quitar un único H1 inicial (# ...)
         if (c.startsWith('# ')) {
           const nl = c.indexOf('\n');
           c = (nl !== -1 ? c.slice(nl + 1) : '').replace(/^\s+/, '');
         }
         return c;
       };
+
       const body = `# ${args.title}\n\n${stripLeadingMeta(args.content)}\n`;
       // bodyAuthors=null → todo el cuerpo se atribuye a Claude.
       persistNote(
@@ -1214,9 +1213,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const wikilinks = [...stripCode(body).matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
       const broken = wikilinks.filter((link) => !RESERVED_LINKS.has(link) && !findNote(link));
 
-      let msg = `Note "${args.title}" ${exists ? 'updated' : 'created'} → ${args.category}/${slug}.md`;
+      let msg = `Nota "${args.title}" ${exists ? 'actualizada' : 'creada'} → ${args.category}/${slug}.md`;
       if (broken.length) {
-        msg += `\n\nNOTICE — Wikilinks pointing to non-existent notes: ${broken.map((b) => `[[${b}]]`).join(', ')}`;
+        msg += `\n\nAVISO — Wikilinks que apuntan a notas inexistentes: ${broken.map((b) => `[[${b}]]`).join(', ')}`;
       }
 
       invalidateCache();
@@ -1232,13 +1231,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         : findNote(args.name);
 
       if (!filePath || !fs.existsSync(filePath)) {
-        return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+        return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
       }
 
       const content = readNoteFile(filePath);
       // Filtrar el bloque Markdown Annotations del output: es metadata interna del
       // MCP, no contenido relevante para el lector. La trazabilidad de autoría se
-      // consulta with read_authorship.
+      // consulta con read_authorship.
       const { frontmatter, body: rawBody } = parseFrontmatter(content);
       const { cleanBody } = stripAnnotationBlock(rawBody);
       const filtered = `---\n${content.slice(4, content.indexOf('---\n', 4) + 4)}\n${cleanBody.replace(/^\s+/, '').replace(/\s+$/, '')}\n`;
@@ -1273,9 +1272,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       if (!results.length) {
-        return { content: [{ type: 'text', text: `No results for "${args.query}".` }] };
+        return { content: [{ type: 'text', text: `Sin resultados para "${args.query}".` }] };
       }
-      return { content: [{ type: 'text', text: `${results.length} result(s) for "${args.query}":\n\n${results.join('\n\n')}` }] };
+      return { content: [{ type: 'text', text: `${results.length} resultado(s) para "${args.query}":\n\n${results.join('\n\n')}` }] };
     }
 
     // ── list_notes ──────────────────────────────────────────────────────
@@ -1293,10 +1292,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (!filtered.length) {
         const context = [];
-        if (args.category) context.push(`category "${args.category}"`);
+        if (args.category) context.push(`categoría "${args.category}"`);
         if (args.tag) context.push(`tag "${args.tag}"`);
-        const filterDesc = context.length ? ` with ${context.join(' y ')}` : '';
-        return { content: [{ type: 'text', text: !args.category && !args.tag ? 'The knowledge base is empty.' : `No notes${filterDesc}.` }] };
+        const filterDesc = context.length ? ` con ${context.join(' y ')}` : '';
+        return { content: [{ type: 'text', text: !args.category && !args.tag ? 'La base de conocimiento está vacía.' : `No hay notas${filterDesc}.` }] };
       }
 
       const backlinksCount = {};
@@ -1319,16 +1318,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── delete_note ─────────────────────────────────────────────────────
     if (name === 'delete_note') {
       const filePath = findNote(args.name);
-      if (!filePath) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!filePath) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const allNotes = getAllNotes();
       const backlinks = getBacklinks(args.name, allNotes);
       fs.unlinkSync(filePath);
       cleanupEmptyAncestors(path.dirname(filePath));
 
-      let msg = `Note "${args.name}" removed.`;
+      let msg = `Nota "${args.name}" eliminada.`;
       if (backlinks.length) {
-        msg += `\n\nNOTICE — The following notes had wikilinks pointing to it: ${backlinks.map((b) => `[[${b}]]`).join(', ')}. Review them to update or remove those links.`;
+        msg += `\n\nAVISO — Las siguientes notas tenían wikilinks apuntando a ella: ${backlinks.map((b) => `[[${b}]]`).join(', ')}. Revísalas para actualizar o eliminar esos enlaces.`;
       }
       invalidateCache();
       return { content: [{ type: 'text', text: msg }] };
@@ -1346,17 +1345,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const slug = slugify(args.name);
       const dir = path.join(MEMORY_ROOT, slug);
       if (fs.existsSync(dir)) {
-        return { content: [{ type: 'text', text: `Category "${slug}" already exists.` }] };
+        return { content: [{ type: 'text', text: `La categoría "${slug}" ya existe.` }] };
       }
       fs.mkdirSync(dir, { recursive: true });
       invalidateCache();
-      return { content: [{ type: 'text', text: `Category "${slug}" created at memoria/${slug}/` }] };
+      return { content: [{ type: 'text', text: `Categoría "${slug}" creada en memoria/${slug}/` }] };
     }
 
     // ── move_note ───────────────────────────────────────────────────────
     if (name === 'move_note') {
       const srcPath = findNote(args.name);
-      if (!srcPath) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!srcPath) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const existing = readNoteFile(srcPath);
       const { frontmatter, body } = parseFrontmatter(existing);
@@ -1369,7 +1368,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const destPath = path.join(destDir, `${newSlug}.md`);
       if (destPath === srcPath) {
-        return { content: [{ type: 'text', text: 'The note is already in that location with that name.' }] };
+        return { content: [{ type: 'text', text: 'La nota ya está en esa ubicación con ese nombre.' }] };
       }
 
       const { cleanBody: bodyWithoutAnnotation } = stripAnnotationBlock(body);
@@ -1446,11 +1445,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      let msg = `Note moved/renamed:\n- Before: ${path.relative(MEMORY_ROOT, srcPath)}\n- Now:   ${newCategory}/${newSlug}.md`;
+      let msg = `Nota movida/renombrada:\n- Antes: ${path.relative(MEMORY_ROOT, srcPath)}\n- Ahora:  ${newCategory}/${newSlug}.md`;
       if (oldSlug !== newSlug) {
         msg += updatedNotes > 0
-          ? `\n\n${updatedNotes} nota(s) with wikilinks a [[${oldSlug}]] updated to [[${newSlug}]].`
-          : `\n\n(No había notas with wikilinks a [[${oldSlug}]])`;
+          ? `\n\n${updatedNotes} nota(s) con wikilinks a [[${oldSlug}]] actualizadas a [[${newSlug}]].`
+          : `\n\n(No había notas con wikilinks a [[${oldSlug}]])`;
       }
       invalidateCache();
       return { content: [{ type: 'text', text: msg }] };
@@ -1460,28 +1459,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (name === 'delete_category') {
       const slug = slugify(args.name);
       const dir = path.join(MEMORY_ROOT, slug);
-      if (!fs.existsSync(dir)) return { content: [{ type: 'text', text: `Category "${slug}" does not exist.` }] };
+      if (!fs.existsSync(dir)) return { content: [{ type: 'text', text: `La categoría "${slug}" no existe.` }] };
 
       const notes = getAllNotes().filter((n) => n.category === slug || n.category.startsWith(`${slug}/`));
       if (notes.length > 0) {
-        return { content: [{ type: 'text', text: `Cannot delete "${slug}": contains ${notes.length} note(s). Move or remove the notes first.` }] };
+        return { content: [{ type: 'text', text: `No se puede eliminar "${slug}": contiene ${notes.length} nota(s). Mueve o elimina las notas primero.` }] };
       }
       fs.rmSync(dir, { recursive: true });
       invalidateCache();
-      return { content: [{ type: 'text', text: `Category "${slug}" removed.` }] };
+      return { content: [{ type: 'text', text: `Categoría "${slug}" eliminada.` }] };
     }
 
     // ── edit_note ───────────────────────────────────────────────────────
     if (name === 'edit_note') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const occurrences = note.body.split(args.old_text).length - 1;
       if (occurrences === 0) {
-        return { content: [{ type: 'text', text: `Could not find the text to replace in note "${args.name}". Make sure old_text matches exactly (including spaces and line breaks).` }] };
+        return { content: [{ type: 'text', text: `No se encontró el texto a reemplazar en la nota "${args.name}". Verifica que old_text coincide exactamente (incluidos espacios y saltos de línea).` }] };
       }
       if (occurrences > 1 && !args.replace_all) {
-        return { content: [{ type: 'text', text: `The text appears ${occurrences} times in the note — ambiguous. Add more context to old_text to make it unique, or use replace_all: true to replace all occurrences.` }] };
+        return { content: [{ type: 'text', text: `El texto aparece ${occurrences} veces en la nota — ambigüedad. Incluye más contexto en old_text para hacerlo único, o usa replace_all: true para sustituir todas las ocurrencias.` }] };
       }
 
       // Aplicar el reemplazo al texto
@@ -1494,12 +1493,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!args.replace_all) {
         // Una única ocurrencia: usar computeBodyDiff sobre todo el cuerpo. Esto
         // detecta automáticamente prefijos y sufijos compartidos entre old_text y
-        // new_text, así que si old_text contains un trozo que se repite literal en
+        // new_text, así que si old_text contiene un trozo que se repite literal en
         // new_text (ej. un hashtag preservado), su autoría humana no se pierde.
         const diff = computeBodyDiff(note.body, newBody);
         bodyAuthors = applyEditToAuthors(bodyAuthors, diff.editStart, diff.oldLength, diff.newLength);
       } else {
-        // replace_all with múltiples ocurrencias no contiguas: computeBodyDiff las
+        // replace_all con múltiples ocurrencias no contiguas: computeBodyDiff las
         // fusionaría en un único bloque grande, destruyendo autoría intermedia. Por
         // eso aplicamos cada edit individual en orden inverso. Aquí el reemplazo
         // ES íntegro y la autoría humana dentro de cada old_text sí se pierde.
@@ -1520,13 +1519,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       persistNote(note.filePath, note.frontmatter, newBody, bodyAuthors);
       invalidateCache();
-      return { content: [{ type: 'text', text: `Note "${args.name}" edited (${occurrences} ${occurrences === 1 ? 'occurrence replaced' : 'occurrences replaced'}).` }] };
+      return { content: [{ type: 'text', text: `Nota "${args.name}" editada (${occurrences} ${occurrences === 1 ? 'ocurrencia reemplazada' : 'ocurrencias reemplazadas'}).` }] };
     }
 
     // ── append_to_note ──────────────────────────────────────────────────
     if (name === 'append_to_note') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const { mainBody, trailing } = splitBodyAndTrailing(note.body);
       const trimmedNew = args.content.trim();
@@ -1541,13 +1540,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
       invalidateCache();
-      return { content: [{ type: 'text', text: `Content appended at the end of "${args.name}"${trailing ? ' (before the hashtag block).' : '.'}` }] };
+      return { content: [{ type: 'text', text: `Contenido añadido al final de "${args.name}"${trailing ? ' (antes del bloque de hashtags).' : '.'}` }] };
     }
 
     // ── prepend_to_note ─────────────────────────────────────────────────
     if (name === 'prepend_to_note') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       // Detectar h1 al inicio y conservarlo arriba
       const h1Match = note.body.match(/^(\s*#\s+.+\n+)/);
@@ -1566,17 +1565,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
       invalidateCache();
-      return { content: [{ type: 'text', text: `Content inserted at the beginning of "${args.name}".` }] };
+      return { content: [{ type: 'text', text: `Contenido insertado al inicio de "${args.name}".` }] };
     }
 
     // ── update_section ──────────────────────────────────────────────────
     if (name === 'update_section') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const sec = findSection(note.body, args.section_title);
       if (!sec) {
-        return { content: [{ type: 'text', text: `Section not found: "${args.section_title}" in note "${args.name}".` }] };
+        return { content: [{ type: 'text', text: `No se encontró la sección "${args.section_title}" en la nota "${args.name}".` }] };
       }
 
       const lines = note.body.split('\n');
@@ -1590,17 +1589,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
       invalidateCache();
-      return { content: [{ type: 'text', text: `Section "${args.section_title}" updated in "${args.name}".` }] };
+      return { content: [{ type: 'text', text: `Sección "${args.section_title}" actualizada en "${args.name}".` }] };
     }
 
     // ── insert_after_section ────────────────────────────────────────────
     if (name === 'insert_after_section') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const sec = findSection(note.body, args.after_section_title);
       if (!sec) {
-        return { content: [{ type: 'text', text: `Section not found: "${args.after_section_title}" in note "${args.name}".` }] };
+        return { content: [{ type: 'text', text: `No se encontró la sección "${args.after_section_title}" en la nota "${args.name}".` }] };
       }
 
       const lines = note.body.split('\n');
@@ -1614,7 +1613,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       persistNote(note.filePath, note.frontmatter, newBody, newBodyAuthors);
       invalidateCache();
-      return { content: [{ type: 'text', text: `Block inserted after section "${args.after_section_title}" en "${args.name}".` }] };
+      return { content: [{ type: 'text', text: `Bloque insertado después de la sección "${args.after_section_title}" en "${args.name}".` }] };
     }
 
     // ── list_broken_links ───────────────────────────────────────────────
@@ -1628,18 +1627,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (bad.length) broken.push({ note: note.name, links: [...new Set(bad)] });
       }
 
-      if (!broken.length) return { content: [{ type: 'text', text: 'No broken wikilinks in the vault.' }] };
+      if (!broken.length) return { content: [{ type: 'text', text: 'No hay wikilinks rotos en la bóveda.' }] };
 
       const lines = broken.map((b) => `- **${b.note}** → ${b.links.map((l) => `[[${l}]]`).join(', ')}`);
-      return { content: [{ type: 'text', text: `${broken.length} note(s) with broken wikilinks:\n\n${lines.join('\n')}` }] };
+      return { content: [{ type: 'text', text: `${broken.length} nota(s) con wikilinks rotos:\n\n${lines.join('\n')}` }] };
     }
 
     // ── find_backlinks ──────────────────────────────────────────────────
     if (name === 'find_backlinks') {
       const allNotes = getCachedAllNotes();
       const backlinks = getBacklinks(args.name, allNotes);
-      if (!backlinks.length) return { content: [{ type: 'text', text: `No note references "${args.name}".` }] };
-      return { content: [{ type: 'text', text: `Backlinks of "${args.name}" (${backlinks.length}):\n${backlinks.map((b) => `- [[${b}]]`).join('\n')}` }] };
+      if (!backlinks.length) return { content: [{ type: 'text', text: `Ninguna nota referencia a "${args.name}".` }] };
+      return { content: [{ type: 'text', text: `Backlinks de "${args.name}" (${backlinks.length}):\n${backlinks.map((b) => `- [[${b}]]`).join('\n')}` }] };
     }
 
     // ── find_orphans ────────────────────────────────────────────────────
@@ -1652,12 +1651,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!hasOutlinks && !hasBacklinks) orphans.push(note);
       }
 
-      if (!orphans.length) return { content: [{ type: 'text', text: 'No notes huérfanas.' }] };
+      if (!orphans.length) return { content: [{ type: 'text', text: 'No hay notas huérfanas.' }] };
 
       const lines = orphans
         .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
         .map((n) => `- **${n.name}** (${n.category})`);
-      return { content: [{ type: 'text', text: `${orphans.length} orphan note(s):\n\n${lines.join('\n')}` }] };
+      return { content: [{ type: 'text', text: `${orphans.length} nota(s) huérfana(s):\n\n${lines.join('\n')}` }] };
     }
 
     // ── rename_wikilink ─────────────────────────────────────────────────
@@ -1702,9 +1701,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         updated++;
       }
 
-      if (!updated) return { content: [{ type: 'text', text: `No note referenced [[${args.old_slug}]].` }] };
+      if (!updated) return { content: [{ type: 'text', text: `Ninguna nota referenciaba [[${args.old_slug}]].` }] };
       invalidateCache();
-      return { content: [{ type: 'text', text: `${updated} note(s) updated: [[${args.old_slug}]] → [[${args.new_slug}]].` }] };
+      return { content: [{ type: 'text', text: `${updated} nota(s) actualizadas: [[${args.old_slug}]] → [[${args.new_slug}]].` }] };
     }
 
     // ── list_tags ───────────────────────────────────────────────────────
@@ -1720,16 +1719,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const entries = Object.entries(tagCount).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-      if (!entries.length) return { content: [{ type: 'text', text: 'No hashtags in the body of any note.' }] };
+      if (!entries.length) return { content: [{ type: 'text', text: 'No hay hashtags en el cuerpo de las notas.' }] };
 
       const lines = entries.map(([t, c]) => `- ${t} — ${c} ${c === 1 ? 'nota' : 'notas'}`);
-      return { content: [{ type: 'text', text: `${entries.length} hashtag(s) in use:\n\n${lines.join('\n')}` }] };
+      return { content: [{ type: 'text', text: `${entries.length} hashtag(s) en uso:\n\n${lines.join('\n')}` }] };
     }
 
     // ── update_frontmatter ──────────────────────────────────────────────
     if (name === 'update_frontmatter') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const allowed = ['title', 'category', 'tags', 'created'];
       const fields = args.fields || {};
@@ -1754,13 +1753,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       invalidateCache();
-      return { content: [{ type: 'text', text: `Frontmatter of "${args.name}" updated.` }] };
+      return { content: [{ type: 'text', text: `Frontmatter de "${args.name}" actualizado.` }] };
     }
 
     // ── peek_note ───────────────────────────────────────────────────────
     if (name === 'peek_note') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const fmText = note.content.match(/^---\n[\s\S]*?\n---\n?/)?.[0] || '';
       const bodyAfterH1 = note.body.replace(/^\s*#\s+.+\n+/, '');
@@ -1772,10 +1771,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── read_section ────────────────────────────────────────────────────
     if (name === 'read_section') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const sec = findSection(note.body, args.section_title);
-      if (!sec) return { content: [{ type: 'text', text: `Section not found: "${args.section_title}" en "${args.name}".` }] };
+      if (!sec) return { content: [{ type: 'text', text: `No se encontró la sección "${args.section_title}" en "${args.name}".` }] };
 
       const lines = note.body.split('\n');
       return { content: [{ type: 'text', text: lines.slice(sec.startLine, sec.endLine).join('\n') }] };
@@ -1784,32 +1783,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── read_frontmatter ────────────────────────────────────────────────
     if (name === 'read_frontmatter') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
-      const fmText = note.content.match(/^---\n[\s\S]*?\n---\n?/)?.[0] || '(no frontmatter)';
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
+      const fmText = note.content.match(/^---\n[\s\S]*?\n---\n?/)?.[0] || '(sin frontmatter)';
       return { content: [{ type: 'text', text: fmText }] };
     }
 
     // ── read_authorship ─────────────────────────────────────────────────
     if (name === 'read_authorship') {
       if (!ANNOTATIONS_ENABLED) {
-        return { content: [{ type: 'text', text: 'Las anotaciones Markdown Annotations están desactivadas. Para activarlas, arranca el MCP with la variable de entorno KB_ENABLE_ANNOTATIONS=1.' }] };
+        return { content: [{ type: 'text', text: 'Las anotaciones Markdown Annotations están desactivadas. Para activarlas, arranca el MCP con la variable de entorno KB_ENABLE_ANNOTATIONS=1.' }] };
       }
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const bodyLength = countGraphemes(note.body);
       if (!note.bodyAuthors.length) {
-        return { content: [{ type: 'text', text: `Note "${args.name}" — body of ${bodyLength} graphemes, no annotation block (not migrated or no traceability).` }] };
+        return { content: [{ type: 'text', text: `Nota "${args.name}" — cuerpo de ${bodyLength} graphemes, sin bloque de anotaciones (no migrada o sin trazabilidad).` }] };
       }
 
-      const lines = [`Note "${args.name}" — body of ${bodyLength} graphemes.`];
+      const lines = [`Nota "${args.name}" — cuerpo de ${bodyLength} graphemes.`];
       let attributedTotal = 0;
       for (const a of note.bodyAuthors) {
         const authorTotal = a.ranges.reduce((s, r) => s + r.length, 0);
         attributedTotal += authorTotal;
         const pct = bodyLength > 0 ? ((authorTotal / bodyLength) * 100).toFixed(1) : '0';
         const id = a.identifier ? ` <${a.identifier}>` : '';
-        lines.push(`\n${a.prefix}${a.name}${id}: ${authorTotal} graphemes in ${a.ranges.length} range(s) (${pct}%)`);
+        lines.push(`\n${a.prefix}${a.name}${id}: ${authorTotal} graphemes en ${a.ranges.length} rango(s) (${pct}%)`);
         for (const r of a.ranges) {
           const snippet = graphemeSlice(note.body, r.start, r.start + r.length);
           const short = snippet.length > 60 ? snippet.slice(0, 40).replace(/\n/g, '⏎') + '…' + snippet.slice(-15).replace(/\n/g, '⏎') : snippet.replace(/\n/g, '⏎');
@@ -1819,7 +1818,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const unattributed = bodyLength - attributedTotal;
       if (unattributed > 0) {
         const pct = ((unattributed / bodyLength) * 100).toFixed(1);
-        lines.push(`\nUnattributed (rendered as human by default in iA Writer): ${unattributed} graphemes (${pct}%)`);
+        lines.push(`\nSin atribuir (renderizado como humano por defecto en iA Writer): ${unattributed} graphemes (${pct}%)`);
       }
       return { content: [{ type: 'text', text: lines.join('\n') }] };
     }
@@ -1836,10 +1835,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         .filter((n) => (n.frontmatter.updated || '') >= cutoffStr)
         .sort((a, b) => (b.frontmatter.updated || '').localeCompare(a.frontmatter.updated || ''));
 
-      if (!recent.length) return { content: [{ type: 'text', text: `No note modified in the last ${days} days.` }] };
+      if (!recent.length) return { content: [{ type: 'text', text: `Ninguna nota modificada en los últimos ${days} días.` }] };
 
       const lines = recent.map((n) => `- **${n.name}** (${n.category}) — ${n.frontmatter.updated}`);
-      return { content: [{ type: 'text', text: `${recent.length} note(s) modified in the last ${days} days:\n\n${lines.join('\n')}` }] };
+      return { content: [{ type: 'text', text: `${recent.length} nota(s) modificadas en los últimos ${days} días:\n\n${lines.join('\n')}` }] };
     }
 
     // ── move_category ───────────────────────────────────────────────────
@@ -1847,8 +1846,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const srcDir = path.join(MEMORY_ROOT, args.name);
       const destDir = path.join(MEMORY_ROOT, args.new_name);
 
-      if (!fs.existsSync(srcDir)) return { content: [{ type: 'text', text: `La category "${args.name}" does not exist.` }] };
-      if (fs.existsSync(destDir)) return { content: [{ type: 'text', text: `La category destino "${args.new_name}" already exists.` }] };
+      if (!fs.existsSync(srcDir)) return { content: [{ type: 'text', text: `La categoría "${args.name}" no existe.` }] };
+      if (fs.existsSync(destDir)) return { content: [{ type: 'text', text: `La categoría destino "${args.new_name}" ya existe.` }] };
 
       fs.mkdirSync(path.dirname(destDir), { recursive: true });
       fs.renameSync(srcDir, destDir);
@@ -1874,34 +1873,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       invalidateCache();
-      return { content: [{ type: 'text', text: `Category "${args.name}" → "${args.new_name}". ${updated} note(s) with frontmatter updated.` }] };
+      return { content: [{ type: 'text', text: `Categoría "${args.name}" → "${args.new_name}". ${updated} nota(s) con frontmatter actualizado.` }] };
     }
 
     // ── validate_note ───────────────────────────────────────────────────
     if (name === 'validate_note') {
       const note = loadNote(args.name);
-      if (!note) return { content: [{ type: 'text', text: `Note "${args.name}" not found.` }] };
+      if (!note) return { content: [{ type: 'text', text: `Nota "${args.name}" no encontrada.` }] };
 
       const issues = [];
       const required = ['title', 'category', 'created', 'updated'];
       for (const f of required) {
-        if (!note.frontmatter[f]) issues.push(`Missing field "${f}" in frontmatter`);
+        if (!note.frontmatter[f]) issues.push(`Falta campo "${f}" en el frontmatter`);
       }
 
       if (!findSection(note.body, 'Ver también')) {
-        issues.push('Missing "## See also" section at the end');
+        issues.push('Falta sección "## Ver también" al final');
       }
 
       const tags = extractHashtags(note.body);
-      if (!tags.length) issues.push('No `#snake_case` hashtags in the body');
+      if (!tags.length) issues.push('No hay hashtags `#snake_case` en el cuerpo');
 
       const RESERVED_LINKS = new Set(['HOME', 'home']);
       const wikilinks = [...stripCode(note.body).matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]);
       const broken = [...new Set(wikilinks.filter((l) => !RESERVED_LINKS.has(l) && !findNote(l)))];
-      if (broken.length) issues.push(`Broken wikilinks: ${broken.map((b) => `[[${b}]]`).join(', ')}`);
+      if (broken.length) issues.push(`Wikilinks rotos: ${broken.map((b) => `[[${b}]]`).join(', ')}`);
 
-      if (!issues.length) return { content: [{ type: 'text', text: `Note "${args.name}" valid. No issues detected.` }] };
-      return { content: [{ type: 'text', text: `Note "${args.name}" — ${issues.length} issue(s):\n${issues.map((i) => `- ${i}`).join('\n')}` }] };
+      if (!issues.length) return { content: [{ type: 'text', text: `Nota "${args.name}" válida. Sin problemas detectados.` }] };
+      return { content: [{ type: 'text', text: `Nota "${args.name}" — ${issues.length} problema(s):\n${issues.map((i) => `- ${i}`).join('\n')}` }] };
     }
 
     // ── bulk_move ───────────────────────────────────────────────────────
@@ -1913,14 +1912,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       for (const noteName of args.names) {
         const srcPath = findNote(noteName);
         if (!srcPath) {
-          results.push(`- ${noteName}: not found`);
+          results.push(`- ${noteName}: no encontrada`);
           continue;
         }
         const raw = readNoteFile(srcPath);
         const { frontmatter, body } = parseFrontmatter(raw);
         const destPath = path.join(destDir, path.basename(srcPath));
         if (destPath === srcPath) {
-          results.push(`- ${noteName}: was already in ${args.new_category}`);
+          results.push(`- ${noteName}: ya estaba en ${args.new_category}`);
           continue;
         }
         // El cuerpo se preserva. Extraemos los rangos de autoría existentes para mantenerlos.
@@ -1939,17 +1938,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
         fs.unlinkSync(srcPath);
         cleanupEmptyAncestors(path.dirname(srcPath));
-        results.push(`- ${noteName}: moved to ${args.new_category}`);
+        results.push(`- ${noteName}: movida a ${args.new_category}`);
       }
 
       invalidateCache();
-      return { content: [{ type: 'text', text: `bulk_move completed:\n${results.join('\n')}` }] };
+      return { content: [{ type: 'text', text: `bulk_move completado:\n${results.join('\n')}` }] };
     }
 
     // ── migrate_annotations ─────────────────────────────────────────────
     if (name === 'migrate_annotations') {
       if (!ANNOTATIONS_ENABLED) {
-        return { content: [{ type: 'text', text: 'Las anotaciones Markdown Annotations están desactivadas. Para activarlas, arranca el MCP with la variable de entorno KB_ENABLE_ANNOTATIONS=1.' }] };
+        return { content: [{ type: 'text', text: 'Las anotaciones Markdown Annotations están desactivadas. Para activarlas, arranca el MCP con la variable de entorno KB_ENABLE_ANNOTATIONS=1.' }] };
       }
       const dryRun = args.dry_run !== false; // por defecto true
 
@@ -1977,11 +1976,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: 'text',
-            text: `DRY RUN — nothing was written.\n\n` +
-              `Notes to migrate (whole body attributed to &Claude): ${toMigrate.length}\n` +
-              `Notes skipped (already have a block): ${alreadyAnnotated.length}\n\n` +
-              (toMigrate.length > 0 ? `First 15 to migrate:\n${sample}\n\n` : '') +
-              `Para ejecutar la migración real, llama de nuevo with dry_run: false.`,
+            text: `DRY RUN — nada se ha escrito.\n\n` +
+              `Notas a migrar (todo el cuerpo atribuido a &Claude): ${toMigrate.length}\n` +
+              `Notas saltadas (ya tienen bloque): ${alreadyAnnotated.length}\n\n` +
+              (toMigrate.length > 0 ? `Primeras 15 a migrar:\n${sample}\n\n` : '') +
+              `Para ejecutar la migración real, llama de nuevo con dry_run: false.`,
           }],
         };
       }
@@ -2005,21 +2004,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const errorText = errors.length
-        ? `\n\nErrors (${errors.length}):\n${errors.map((e) => `  - ${e.name}: ${e.error}`).join('\n')}`
+        ? `\n\nErrores (${errors.length}):\n${errors.map((e) => `  - ${e.name}: ${e.error}`).join('\n')}`
         : '';
       invalidateCache();
       return {
         content: [{
           type: 'text',
-          text: `Migration completed.\n\n` +
-            `Notes migrated: ${migrated}\n` +
-            `Notes skipped (already had a block): ${alreadyAnnotated.length}\n` +
-            `Errors: ${errors.length}${errorText}`,
+          text: `Migración completada.\n\n` +
+            `Notas migradas: ${migrated}\n` +
+            `Notas saltadas (ya tenían bloque): ${alreadyAnnotated.length}\n` +
+            `Errores: ${errors.length}${errorText}`,
         }],
       };
     }
 
-    return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
+    return { content: [{ type: 'text', text: `Herramienta desconocida: ${name}` }], isError: true };
   } catch (error) {
     return { content: [{ type: 'text', text: `Error: ${error.message}` }], isError: true };
   }

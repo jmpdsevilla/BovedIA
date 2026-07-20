@@ -1,305 +1,328 @@
-# Tools Reference — All 27 MCP Tools
+# Referencia de herramientas — Las 29 herramientas MCP
 
-Complete reference for all tools provided by simple-memory-claude (v1.2.0+).
+Referencia completa de todas las herramientas de BovedIA (v1.5.1).
 
-The tools are grouped in four blocks:
-1. **Base CRUD** (9) — original tools from v1.1.x
-2. **Targeted editing** (5) — incremental edits without re-sending the whole note
-3. **Wikilink and tag maintenance** (6) — vault-wide link and tag operations
-4. **Cheap reads & maintenance** (7) — partial reads and housekeeping
+Las herramientas se agrupan en cinco bloques:
+1. **CRUD base** (9) — lectura y escritura de notas
+2. **Edición dirigida** (5) — retoques incrementales sin reenviar la nota entera
+3. **Mantenimiento de wikilinks y tags** (6) — operaciones sobre enlaces y tags de toda la bóveda
+4. **Lecturas baratas y mantenimiento** (7) — lecturas parciales y limpieza
+5. **Autoría** (2) — se listan siempre, pero solo operan con `KB_ENABLE_ANNOTATIONS=1`
 
 ---
 
-## Block 1 — Base CRUD
+## Bloque 1 — CRUD base
 
 ### write_note
 
-Creates or updates a note (full upsert behaviour — the body is overwritten entirely). For incremental edits, use `edit_note`, `append_to_note`, `prepend_to_note`, `update_section` or `insert_after_section` instead.
+Crea o actualiza una nota (comportamiento de upsert completo: el cuerpo se sobrescribe entero). Para retoques incrementales, usa `edit_note`, `append_to_note`, `prepend_to_note`, `update_section` o `insert_after_section`.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `title` | string | yes | Note title |
-| `content` | string | yes | Markdown content (no frontmatter, no h1) |
-| `category` | string | yes | Destination folder |
-| `tags` | array | no | Tags to classify the note |
-| `name` | string | no | Existing slug to update |
+| `title` | string | sí | Título de la nota |
+| `content` | string | sí | Contenido Markdown (sin frontmatter ni h1) |
+| `category` | string | sí | Carpeta de destino |
+| `tags` | array | no | Tags para clasificar la nota |
+| `name` | string | no | Slug existente a actualizar |
 
 ### read_note
 
-Reads the full content of a note plus its backlinks.
+Lee el contenido completo de una nota más sus backlinks.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug (without .md) |
+| `name` | string | sí | Slug de la nota (sin .md) |
 
 ### search_notes
 
-Searches notes by free text with AND logic.
+Busca notas por texto libre con lógica AND.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `query` | string | yes | Search terms (space-separated) |
+| `query` | string | sí | Términos de búsqueda (separados por espacios) |
 
 ### list_notes
 
-Lists notes with metadata, optionally filtered.
+Lista notas con sus metadatos, opcionalmente filtradas. El filtro de categoría es recursivo (incluye subcarpetas).
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `category` | string | no | Exact category match |
-| `tag` | string | no | Tag filter |
+| `category` | string | no | Categoría a filtrar (recursiva) |
+| `tag` | string | no | Filtro por tag |
 
 ### get_index
 
-Returns the full vault index with note counts and backlinks. No parameters.
+Devuelve el índice completo de la bóveda con recuentos y backlinks. Sin parámetros.
 
 ### delete_note
 
-Deletes a note permanently. Warns about backlinks.
+Elimina una nota de forma permanente. Avisa de los backlinks que la referencian.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
+| `name` | string | sí | Slug de la nota |
 
 ### create_category
 
-Creates a new folder.
+Crea una carpeta nueva.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Category name |
+| `name` | string | sí | Nombre de la categoría |
 
 ### move_note
 
-Moves and/or renames a note. When the slug changes, all wikilinks pointing to it are updated automatically.
+Mueve y/o renombra una nota. Cuando el slug cambia, todos los wikilinks que apuntan a ella se actualizan automáticamente.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Current note slug |
-| `new_category` | string | no | Destination category |
-| `new_title` | string | no | New title (triggers rename) |
+| `name` | string | sí | Slug actual de la nota |
+| `new_category` | string | no | Categoría de destino |
+| `new_title` | string | no | Título nuevo (dispara el renombrado) |
 
 ### delete_category
 
-Deletes an empty category folder.
+Elimina una carpeta de categoría vacía.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Category name |
+| `name` | string | sí | Nombre de la categoría |
 
 ---
 
-## Block 2 — Targeted editing
+## Bloque 2 — Edición dirigida
 
 ### edit_note
 
-Find/replace inside the body of a note without re-sending the whole file. Fails if `old_text` does not appear or appears more than once (ambiguous), unless `replace_all: true`.
+Buscar/reemplazar dentro del cuerpo de una nota sin reenviar el archivo entero. Falla si `old_text` no aparece o aparece más de una vez (ambiguo), salvo con `replace_all: true`.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
-| `old_text` | string | yes | Exact text to replace (must be unique) |
-| `new_text` | string | yes | Replacement text |
-| `replace_all` | boolean | no | Replace every occurrence. Defaults to false |
+| `name` | string | sí | Slug de la nota |
+| `old_text` | string | sí | Texto exacto a reemplazar (debe ser único) |
+| `new_text` | string | sí | Texto de reemplazo |
+| `replace_all` | boolean | no | Reemplaza todas las apariciones. Por defecto false |
 
-**Example:**
+**Ejemplo:**
 ```
 edit_note(
-  name: "stack-supabase",
-  old_text: "anon key: sb_publishable_OLD",
-  new_text: "anon key: sb_publishable_NEW"
+  name: "referencia-ejemplo",
+  old_text: "clave: valor_viejo",
+  new_text: "clave: valor_nuevo"
 )
 ```
 
 ### append_to_note
 
-Appends content at the end of a note body. If the note ends with a `#snake_case` hashtag line, the new content is inserted **before** the hashtags so the trailing tag block stays at the bottom.
+Añade contenido al final del cuerpo. Si la nota termina con una línea de hashtags `#snake_case`, el contenido nuevo se inserta **antes** de los hashtags para que el bloque de tags quede al fondo.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
-| `content` | string | yes | Markdown content to append |
+| `name` | string | sí | Slug de la nota |
+| `content` | string | sí | Contenido Markdown a añadir |
 
 ### prepend_to_note
 
-Inserts content at the beginning of a note body, right after the h1 title (if present).
+Inserta contenido al principio del cuerpo, justo después del título h1 (si lo hay).
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
-| `content` | string | yes | Markdown content to insert |
+| `name` | string | sí | Slug de la nota |
+| `content` | string | sí | Contenido Markdown a insertar |
 
 ### update_section
 
-Replaces the content between a markdown heading and the next heading of equal or higher level. The heading is preserved; only the body of the section is rewritten.
+Reemplaza el contenido entre un encabezado Markdown y el siguiente encabezado de igual o mayor nivel. El encabezado se conserva; solo se reescribe el cuerpo de la sección.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
-| `section_title` | string | yes | Exact heading text without `#` |
-| `new_content` | string | yes | New section content (no heading) |
+| `name` | string | sí | Slug de la nota |
+| `section_title` | string | sí | Texto exacto del encabezado sin `#` |
+| `new_content` | string | sí | Nuevo contenido de la sección (sin encabezado) |
 
-**Example:**
+**Ejemplo:**
 ```
 update_section(
-  name: "client-acme",
-  section_title: "Active subscriptions",
-  new_content: "| Plan | Status |\n|---|---|\n| Pro | Active |\n"
+  name: "cliente-ejemplo",
+  section_title: "Trabajos",
+  new_content: "| Trabajo | Estado |\n|---|---|\n| Web | Activo |\n"
 )
 ```
 
 ### insert_after_section
 
-Inserts a new markdown block immediately after the named section ends. The new block typically contains its own heading.
+Inserta un bloque Markdown nuevo justo después de que termina la sección indicada. El bloque nuevo normalmente lleva su propio encabezado.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
-| `after_section_title` | string | yes | Heading after which to insert |
-| `new_content` | string | yes | New markdown block (with its own heading) |
+| `name` | string | sí | Slug de la nota |
+| `after_section_title` | string | sí | Encabezado tras el cual insertar |
+| `new_content` | string | sí | Bloque Markdown nuevo (con su propio encabezado) |
 
 ---
 
-## Block 3 — Wikilink and tag maintenance
+## Bloque 3 — Mantenimiento de wikilinks y tags
 
 ### list_broken_links
 
-Returns every wikilink in the vault that points to a non-existent note, grouped by source note. No parameters.
+Devuelve todos los wikilinks de la bóveda que apuntan a una nota inexistente, agrupados por nota de origen. Sin parámetros.
 
 ### find_backlinks
 
-Returns only the backlinks of a note, without loading its content. Cheaper than `read_note` when you only need backlinks.
+Devuelve solo los backlinks de una nota, sin cargar su contenido. Más barato que `read_note` cuando solo necesitas los backlinks.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
+| `name` | string | sí | Slug de la nota |
 
 ### find_orphans
 
-Lists notes that have no backlinks **and** no outgoing wikilinks. No parameters.
+Lista las notas que no tienen backlinks **ni** wikilinks salientes. Sin parámetros.
 
 ### rename_wikilink
 
-Globally substitutes one wikilink with another across all notes. Does not move files. Use `move_note` if you want to rename the actual note.
+Sustituye globalmente un wikilink por otro en todas las notas. No mueve archivos. Usa `move_note` si quieres renombrar la nota real.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `old_slug` | string | yes | Old wikilink (without brackets) |
-| `new_slug` | string | yes | New wikilink (without brackets) |
+| `old_slug` | string | sí | Wikilink viejo (sin corchetes) |
+| `new_slug` | string | sí | Wikilink nuevo (sin corchetes) |
 
 ### list_tags
 
-Returns every `#snake_case` hashtag found in note bodies, with the count of notes using it. Useful for auditing taxonomy and detecting variants. No parameters.
+Devuelve todos los hashtags `#snake_case` encontrados en los cuerpos de las notas, con el número de notas que los usan. Útil para auditar la taxonomía y detectar variantes. Sin parámetros.
 
 ### update_frontmatter
 
-Updates specific YAML fields without touching the body. The `updated` field is always refreshed to today. If the `category` field changes, the file is moved to the new folder.
+Actualiza campos YAML concretos sin tocar el cuerpo. El campo `updated` se refresca siempre a hoy. Si cambia el campo `category`, el archivo se mueve a la carpeta nueva.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
-| `fields` | object | yes | Object with `title`, `category`, `tags` (array) and/or `created` |
+| `name` | string | sí | Slug de la nota |
+| `fields` | object | sí | Objeto con `title`, `category`, `tags` (array) y/o `created` |
 
 ---
 
-## Block 4 — Cheap reads & maintenance
+## Bloque 4 — Lecturas baratas y mantenimiento
 
 ### peek_note
 
-Returns the frontmatter plus the first paragraph of the body. Saves tokens when you only need to verify a category, tag or topic.
+Devuelve el frontmatter más el primer párrafo del cuerpo. Ahorra tokens cuando solo necesitas verificar una categoría, tag o tema.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
+| `name` | string | sí | Slug de la nota |
 
 ### read_section
 
-Returns only one markdown section, identified by its heading. Spans from the heading until the next heading of equal or higher level.
+Devuelve solo una sección Markdown, identificada por su encabezado. Va desde el encabezado hasta el siguiente de igual o mayor nivel.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
-| `section_title` | string | yes | Exact heading text without `#` |
+| `name` | string | sí | Slug de la nota |
+| `section_title` | string | sí | Texto exacto del encabezado sin `#` |
 
 ### read_frontmatter
 
-Returns only the YAML frontmatter of a note.
+Devuelve solo el frontmatter YAML de una nota.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
+| `name` | string | sí | Slug de la nota |
 
 ### recently_updated
 
-Lists notes whose `updated` field is within the last N days.
+Lista las notas cuyo campo `updated` cae dentro de los últimos N días.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `days` | number | no | Days to look back. Defaults to 7 |
+| `days` | number | no | Días hacia atrás. Por defecto 7 |
 
 ### move_category
 
-Renames or relocates an entire category folder along with its notes. Updates the `category` field in the frontmatter of every affected note. Wikilinks are not touched (slugs do not change).
+Renombra o reubica una carpeta de categoría entera con sus notas. Actualiza el campo `category` en el frontmatter de cada nota afectada. Los wikilinks no se tocan (los slugs no cambian).
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Current category path |
-| `new_name` | string | yes | New category path |
+| `name` | string | sí | Ruta de categoría actual |
+| `new_name` | string | sí | Ruta de categoría nueva |
 
 ### validate_note
 
-Audits a note against the vault conventions:
-- Frontmatter must include `title`, `category`, `created`, `updated`
-- Body must end with a `## See also` section (`## Ver también` is also accepted)
-- Body must include at least one `#snake_case` hashtag
-- Wikilinks must point to existing notes
+Audita una nota contra las convenciones de la bóveda:
+- El frontmatter debe incluir `title`, `category`, `created`, `updated`
+- El cuerpo debe terminar con una sección `## Ver también` (también se acepta `## See also`)
+- El cuerpo debe incluir al menos un hashtag `#snake_case`
+- Los wikilinks deben apuntar a notas existentes
 
-Returns a report with the issues found.
+Devuelve un informe con los problemas encontrados.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `name` | string | yes | Note slug |
+| `name` | string | sí | Slug de la nota |
 
 ### bulk_move
 
-Moves several notes to the same destination category in a single call. Does not rename — use `move_note` per note for renames.
+Mueve varias notas a la misma categoría de destino en una sola llamada. No renombra — usa `move_note` por nota para renombrar.
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Obligatorio | Descripción |
 |---|---|---|---|
-| `names` | array | yes | List of note slugs to move |
-| `new_category` | string | yes | Destination category |
+| `names` | array | sí | Lista de slugs a mover |
+| `new_category` | string | sí | Categoría de destino |
+
+---
+
+## Bloque 5 — Autoría (opcional)
+
+Estas dos herramientas se listan siempre, pero solo operan cuando el servidor arranca con `KB_ENABLE_ANNOTATIONS=1` (sin ese flag, informan de que están desactivadas). Registran la autoría por rangos según la spec [Markdown Annotations](https://github.com/iainc/Markdown-Annotations).
+
+### read_authorship
+
+Devuelve un resumen compacto de qué autor escribió qué rangos de una nota.
+
+| Parámetro | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `name` | string | sí | Slug de la nota |
+
+### migrate_annotations
+
+Añade el bloque de autoría a todas las notas existentes de una sola vez (conserva el campo `updated` original). Ejecútala con `dry_run: true` primero para auditar sin escribir.
+
+| Parámetro | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `dry_run` | boolean | no | Si es true, solo informa de lo que haría sin escribir |
 
 ---
 
 ## Wikilinks
 
-All tools that process wikilinks use the `[[slug]]` format:
+Todas las herramientas que procesan wikilinks usan el formato `[[slug]]`:
 
 ```markdown
-## See also
+## Ver también
 
-- [[tool-example]] — related tool
-- [[project-example]] — project that uses this
+- [[referencia-ejemplo]] — referencia relacionada
+- [[proyecto-ejemplo]] — proyecto que usa esto
 ```
 
-Rules:
-- Always use the note slug (kebab-case filename without `.md`)
-- No paths: ~~`[[stack/supabase]]`~~ → `[[supabase]]`
-- No aliases: ~~`[[supabase|Supabase Config]]`~~ → `[[supabase]]`
-- Code blocks are excluded from wikilink detection
+Reglas:
+- Usa siempre el slug de la nota (nombre de archivo kebab-case, sin `.md`)
+- Sin rutas: ~~`[[referencias/x]]`~~ → `[[x]]`
+- Sin alias: ~~`[[x|otro texto]]`~~ → `[[x]]`
+- Los bloques de código quedan excluidos de la detección de wikilinks
 
 ---
 
 ## Hashtags
 
-The vault convention is to put `#snake_case` hashtags at the end of the note body, on a single line, separated by spaces:
+La convención de la bóveda es poner los hashtags `#snake_case` al final del cuerpo, en una sola línea, separados por espacios:
 
 ```markdown
-## See also
+## Ver también
 
-- [[other-note]]
+- [[otra-nota]]
 
-#tipo_referencia #project_name #author_claude
+#tipo_referencia #nombre_proyecto #autor_claude
 ```
 
-`list_tags` finds every hashtag of this format anywhere in the body. `append_to_note` detects a trailing hashtag line and inserts new content **before** it so the line stays at the bottom.
+`list_tags` encuentra todos los hashtags de este formato en cualquier parte del cuerpo. `append_to_note` detecta la línea de hashtags al final e inserta el contenido nuevo **antes** de ella para que la línea se quede al fondo.

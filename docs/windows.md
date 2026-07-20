@@ -1,28 +1,28 @@
-# Installation — Windows
+# Instalación — Windows
 
-On Windows you can store your vault in any synced cloud folder. The most common options are OneDrive (built into Windows) and Google Drive.
-
----
-
-## Requirements
-
-- Windows 10 or later
-- Node.js 18 or later — download from [nodejs.org](https://nodejs.org)
-- A cloud sync app: OneDrive (pre-installed) or Google Drive
-- Claude Code installed: `npm install -g @anthropic-ai/claude-code`
+En Windows puedes guardar tu bóveda en cualquier carpeta sincronizada en la nube. Las opciones más comunes son OneDrive (integrado en Windows) y Google Drive.
 
 ---
 
-## Step 1 — Clone the repository
+## Requisitos
+
+- Windows 10 o superior
+- Node.js 18 o superior — descárgalo de [nodejs.org](https://nodejs.org)
+- Una app de sincronización en la nube: OneDrive (preinstalada) o Google Drive
+- Claude Code instalado: `npm install -g @anthropic-ai/claude-code`
+
+---
+
+## Paso 1 — Clonar el repositorio
 
 ```powershell
-git clone https://github.com/jmpdsevilla/simple-memory-claude.git
-cd simple-memory-claude
+git clone https://github.com/jmpdsevilla/BovedIA.git
+cd BovedIA
 ```
 
 ---
 
-## Step 2 — Install server dependencies
+## Paso 2 — Instalar las dependencias del servidor
 
 ```powershell
 cd server
@@ -32,38 +32,38 @@ cd ..
 
 ---
 
-## Step 3 — Create your vault
+## Paso 3 — Crear tu bóveda
 
-**Option A — OneDrive (recommended)**
-
-```powershell
-xcopy /E /I vault-example "%USERPROFILE%\OneDrive\my-memory"
-```
-
-**Option B — Google Drive**
+**Opción A — OneDrive (recomendada)**
 
 ```powershell
-xcopy /E /I vault-example "%USERPROFILE%\Google Drive\My Drive\my-memory"
+xcopy /E /I vault-example "%USERPROFILE%\OneDrive\mi-boveda"
 ```
 
-Then open `my-memory\HOME.md` and customize it with your own information.
+**Opción B — Google Drive**
+
+```powershell
+xcopy /E /I vault-example "%USERPROFILE%\Google Drive\My Drive\mi-boveda"
+```
+
+Luego abre `mi-boveda\Inicio.md` y `mi-boveda\HOME.md` y personalízalos con tu información.
 
 ---
 
-## Step 4 — Configure Claude Code
+## Paso 4 — Configurar Claude Code
 
-Edit `%USERPROFILE%\.claude\claude.json`:
+Edita `%USERPROFILE%\.claude.json`:
 
 **OneDrive:**
 
 ```json
 {
   "mcpServers": {
-    "simple-memory": {
+    "bovedia": {
       "command": "node",
-      "args": ["C:\\Users\\yourname\\simple-memory-claude\\server\\index.js"],
+      "args": ["C:\\Users\\tunombre\\BovedIA\\server\\index.js"],
       "env": {
-        "MEMORY_PATH": "C:\\Users\\yourname\\OneDrive\\my-memory"
+        "KB_MEMORY_ROOT": "C:\\Users\\tunombre\\OneDrive\\mi-boveda"
       }
     }
   }
@@ -75,35 +75,29 @@ Edit `%USERPROFILE%\.claude\claude.json`:
 ```json
 {
   "mcpServers": {
-    "simple-memory": {
+    "bovedia": {
       "command": "node",
-      "args": ["C:\\Users\\yourname\\simple-memory-claude\\server\\index.js"],
+      "args": ["C:\\Users\\tunombre\\BovedIA\\server\\index.js"],
       "env": {
-        "MEMORY_PATH": "C:\\Users\\yourname\\Google Drive\\My Drive\\my-memory"
+        "KB_MEMORY_ROOT": "C:\\Users\\tunombre\\Google Drive\\My Drive\\mi-boveda"
       }
     }
   }
 }
 ```
 
-> Replace `yourname` with your actual Windows username.
+> Reemplaza `tunombre` por tu nombre de usuario real de Windows.
 
 ---
 
-## Step 5 — Verify
+## Paso 5 — Verificar
 
-Restart Claude Code and run:
-
-```
-get_index
-```
-
-You should see the index of your vault.
+Reinicia Claude Code y pide leer `Inicio`, o ejecutar `get_index`. Deberías ver tu bóveda.
 
 ---
 
-## Tips for Windows
+## Consejos para Windows
 
-- Use full absolute paths — avoid relative paths or environment variables in the JSON config
-- Make sure the cloud sync app is running and the folder is synced before using Claude Code
-- If you get a `ENOENT` error, double-check that the `MEMORY_PATH` folder exists and is spelled correctly
+- Usa rutas absolutas completas — evita rutas relativas en la configuración JSON.
+- Asegúrate de que la app de sincronización esté corriendo y la carpeta sincronizada antes de usar Claude Code.
+- Si obtienes un error `ENOENT`, comprueba que la carpeta de `KB_MEMORY_ROOT` existe y está bien escrita.

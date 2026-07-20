@@ -1,27 +1,27 @@
-# Installation — Linux
+# Instalación — Linux
 
-On Linux you can store your vault in any synced cloud folder. The most common options are Dropbox and Google Drive (via rclone).
-
----
-
-## Requirements
-
-- Node.js 18 or later (`node --version` to check)
-- A cloud sync app: Dropbox, rclone (Google Drive), or Nextcloud
-- Claude Code installed: `npm install -g @anthropic-ai/claude-code`
+En Linux puedes guardar tu bóveda en cualquier carpeta sincronizada en la nube. Las opciones más comunes son Dropbox y Google Drive (vía rclone).
 
 ---
 
-## Step 1 — Clone the repository
+## Requisitos
+
+- Node.js 18 o superior (`node --version` para comprobar)
+- Una app de sincronización: Dropbox, rclone (Google Drive) o Nextcloud
+- Claude Code instalado: `npm install -g @anthropic-ai/claude-code`
+
+---
+
+## Paso 1 — Clonar el repositorio
 
 ```bash
-git clone https://github.com/jmpdsevilla/simple-memory-claude.git
-cd simple-memory-claude
+git clone https://github.com/jmpdsevilla/BovedIA.git
+cd BovedIA
 ```
 
 ---
 
-## Step 2 — Install server dependencies
+## Paso 2 — Instalar las dependencias del servidor
 
 ```bash
 cd server
@@ -31,47 +31,47 @@ cd ..
 
 ---
 
-## Step 3 — Create your vault
+## Paso 3 — Crear tu bóveda
 
-**Option A — Dropbox**
-
-```bash
-cp -r vault-example ~/Dropbox/my-memory
-```
-
-**Option B — Google Drive via rclone**
-
-First, [install and configure rclone](https://rclone.org/drive/) with your Google Drive account. Then:
+**Opción A — Dropbox**
 
 ```bash
-mkdir -p ~/google-drive/my-memory
-cp -r vault-example/. ~/google-drive/my-memory/
+cp -r vault-example ~/Dropbox/mi-boveda
 ```
 
-**Option C — Local only (no sync)**
+**Opción B — Google Drive vía rclone**
+
+Primero, [instala y configura rclone](https://rclone.org/drive/) con tu cuenta de Google Drive. Luego:
 
 ```bash
-cp -r vault-example ~/my-memory
+mkdir -p ~/google-drive/mi-boveda
+cp -r vault-example/. ~/google-drive/mi-boveda/
 ```
 
-Then customize `HOME.md` with your own information.
+**Opción C — Solo local (sin sincronizar)**
+
+```bash
+cp -r vault-example ~/mi-boveda
+```
+
+Luego personaliza `Inicio.md` y `HOME.md` con tu información.
 
 ---
 
-## Step 4 — Configure Claude Code
+## Paso 4 — Configurar Claude Code
 
-Edit `~/.claude/claude.json`:
+Edita `~/.claude.json`:
 
 **Dropbox:**
 
 ```json
 {
   "mcpServers": {
-    "simple-memory": {
+    "bovedia": {
       "command": "node",
-      "args": ["/home/yourname/simple-memory-claude/server/index.js"],
+      "args": ["/home/tunombre/BovedIA/server/index.js"],
       "env": {
-        "MEMORY_PATH": "/home/yourname/Dropbox/my-memory"
+        "KB_MEMORY_ROOT": "/home/tunombre/Dropbox/mi-boveda"
       }
     }
   }
@@ -83,36 +83,30 @@ Edit `~/.claude/claude.json`:
 ```json
 {
   "mcpServers": {
-    "simple-memory": {
+    "bovedia": {
       "command": "node",
-      "args": ["/home/yourname/simple-memory-claude/server/index.js"],
+      "args": ["/home/tunombre/BovedIA/server/index.js"],
       "env": {
-        "MEMORY_PATH": "/home/yourname/google-drive/my-memory"
+        "KB_MEMORY_ROOT": "/home/tunombre/google-drive/mi-boveda"
       }
     }
   }
 }
 ```
 
-> Replace `yourname` with your actual Linux username.
+> Reemplaza `tunombre` por tu nombre de usuario real de Linux.
 
 ---
 
-## Step 5 — Verify
+## Paso 5 — Verificar
 
-Restart Claude Code and run:
-
-```
-get_index
-```
-
-You should see the index of your vault.
+Reinicia Claude Code y pide leer `Inicio`, o ejecutar `get_index`. Deberías ver tu bóveda.
 
 ---
 
-## Tips for Linux
+## Consejos para Linux
 
-- Dropbox on Linux requires the [Dropbox daemon](https://www.dropbox.com/install-linux) — not just the web version
-- With rclone, use `rclone mount` to keep the folder synced in real time
-- For Nextcloud, point `MEMORY_PATH` to your local Nextcloud sync folder
-- The vault is plain Markdown files — any sync method that keeps files available locally will work
+- Dropbox en Linux necesita el [demonio de Dropbox](https://www.dropbox.com/install-linux), no solo la versión web.
+- Con rclone, usa `rclone mount` para mantener la carpeta sincronizada en tiempo real.
+- Para Nextcloud, apunta `KB_MEMORY_ROOT` a tu carpeta local de sincronización de Nextcloud.
+- La bóveda son archivos Markdown planos: cualquier método de sincronización que mantenga los archivos disponibles en local funcionará.

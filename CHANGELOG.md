@@ -1,10 +1,31 @@
 # Changelog
 
 Todos los cambios destacables de este proyecto se documentan en este archivo.
-All notable changes to this project are documented in this file.
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/) y el versionado [Semantic Versioning](https://semver.org/).
-The format follows [Keep a Changelog](https://keepachangelog.com/) and versioning [Semantic Versioning](https://semver.org/).
+
+> A partir de la versión 2.0.0 el proyecto pasa a llamarse **BovedIA** y a documentarse íntegramente en español. Las entradas anteriores se conservan tal cual como registro histórico.
+
+---
+
+## [2.0.0] — 2026-07-20
+
+### Cambiado
+
+**Renombrado del proyecto a BovedIA** (bóveda + IA). El repositorio pasa de `simple-memory-claude` a `BovedIA`. GitHub redirige automáticamente las URLs antiguas; la antigüedad, el histórico y las releases se conservan.
+
+**Un solo idioma: español.** El proyecto —README, documentación, bóveda de ejemplo y descripciones de las herramientas— pasa a estar íntegramente en español.
+
+**Motor unificado.** El servidor deja de mantenerse como dos copias divergentes (una pública en inglés y una personal en español); ahora es un único código, y las diferencias de cada instalación se controlan por variables de entorno:
+- `KB_MEMORY_ROOT` (con alias `MEMORY_PATH`) define la carpeta de la bóveda. Acepta rutas con `~` y relativas. Si no se define ninguna, usa `~/Documents/bovedia` por defecto.
+- `KB_SERVER_NAME` permite fijar el nombre con que el servidor se anuncia (por defecto `bovedia`), para conservar un identificador propio en una instalación existente sin cambiar el flujo de trabajo.
+
+**Bóveda de ejemplo rehecha.** `vault-example/` ahora enseña el método completo: el router `Inicio`, la pirámide de tres niveles, el alma (donde se vuelca lo que uno piensa y siente) y carpetas de ejemplo para proyectos, clientes, conocimiento y referencias.
+
+### Notas
+
+- La API de herramientas no cambia: las 29 herramientas conservan nombres, parámetros y comportamiento.
+- Cambios incompatibles respecto a v1.5.1: el nombre del servidor por defecto pasa de `knowledge-base` a `bovedia`, y la ruta por defecto de la bóveda pasa a `~/Documents/bovedia`. Define `KB_SERVER_NAME` y `KB_MEMORY_ROOT` si dependías de los valores anteriores.
 
 ---
 
@@ -304,9 +325,10 @@ No other behavioral changes. All 9 tools still accept the same parameters and re
 - 8 MCP tools operational.
 - Vault configuration via the `MEMORY_PATH` environment variable.
 
-[1.2.0]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.2.0
-[1.1.4]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.4
-[1.1.2]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.2
-[1.1.1]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.1
-[1.1.0]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.1.0
-[1.0.0]: https://github.com/jmpdsevilla/simple-memory-claude/releases/tag/v1.0.0
+[2.0.0]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v2.0.0
+[1.2.0]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.2.0
+[1.1.4]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.1.4
+[1.1.2]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.1.2
+[1.1.1]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.1.1
+[1.1.0]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.1.0
+[1.0.0]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.0.0

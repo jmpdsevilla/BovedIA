@@ -1,7 +1,6 @@
-# simple-memory-claude
+# BovedIA
 
-**Sistema de memoria personal simple y efectivo para Claude Code.**  
-**Simple and effective personal memory system for Claude Code.**
+**Memoria personal para Claude Code: tus notas en Markdown, tuyas y para siempre.**
 
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
@@ -9,166 +8,127 @@
 
 ---
 
-## ¿Qué es esto? / What is this?
+## Qué es BovedIA
 
-**[ES]** Un servidor MCP que le da memoria persistente a Claude Code. Tus notas viven en archivos Markdown simples, sincronizados en la nube. Claude puede leerlas, crearlas, buscarlas y organizarlas durante cualquier sesión de trabajo.
+**BovedIA** (bóveda + IA) es un servidor MCP que le da a Claude Code —y a cualquier cliente MCP— **memoria persistente**. Tus notas viven en archivos Markdown planos, en tu disco, sincronizados en la nube si quieres. La IA puede leerlas, crearlas, buscarlas y organizarlas durante cualquier sesión de trabajo.
 
-**[EN]** An MCP server that gives Claude Code persistent memory. Your notes live in plain Markdown files, synced to the cloud. Claude can read, create, search and organize them during any working session.
-
----
-
-## ¿Por qué este sistema? / Why this system?
-
-**[ES]**
-
-Hay muchos sistemas de memoria para Claude y agentes de IA, pero la mayoría son complejos, requieren configuraciones largas o dependen de servicios externos. Este sistema parte de una premisa diferente:
-
-- **Simple:** un solo archivo de servidor (`index.js`), una dependencia
-- **Tuyo:** las notas son archivos `.md` en tu disco — sin bases de datos, sin APIs externas
-- **Portátil:** funciona con iCloud, OneDrive, Google Drive, Dropbox o cualquier carpeta local
-- **Transparente:** puedes abrir y editar tus notas en cualquier editor de texto
-
-**[EN]**
-
-There are many memory systems for Claude and AI agents, but most are complex, require lengthy setup or depend on external services. This system starts from a different premise:
-
-- **Simple:** a single server file (`index.js`), one dependency
-- **Yours:** notes are `.md` files on your disk — no databases, no external APIs
-- **Portable:** works with iCloud, OneDrive, Google Drive, Dropbox or any local folder
-- **Transparent:** you can open and edit your notes in any text editor
+Pero BovedIA no es solo el motor. Es también **una forma de organizar la memoria** para que la IA llegue a cada conversación ligera y enfocada, en vez de arrastrar todo el contexto de golpe. Esa forma va incluida en el `vault-example/` de este repositorio, lista para adaptar.
 
 ---
 
-## Características / Features
+## La idea de fondo: no cargar todo de golpe
 
-- **29 MCP tools** in four blocks: base CRUD, targeted editing, wikilink/tag maintenance, cheap reads
-- **Targeted editing** — find/replace, append, prepend, section update without re-sending the whole file
-- **Markdown-aware section operations** — read or rewrite a section by its heading
-- **Cheap reads** — peek (frontmatter + first paragraph), read a single section, read frontmatter only
-- **Wikilink tools** — list broken links, find backlinks, find orphans, rename a wikilink globally
-- **Tag tools** — list all `#snake_case` hashtags with note counts
-- **Vault maintenance** — recently updated, validate note structure, bulk move, move category
-- **Optional authorship tracking** — Markdown Annotations support (opt-in via `KB_ENABLE_ANNOTATIONS=1`). Tracks which author wrote which ranges of each note, preserves human authorship when Claude edits afterward. Renders natively in iA Writer.
-- AND logic search — all terms must appear in the note
-- Automatic wikilink update when a note is renamed
-- Frontmatter with title, category, tags, created and updated dates
-- Broken wikilink detection on save
-- Configurable vault path via environment variable
+Casi todos los sistemas de memoria vuelcan todo el contexto en cada sesión. BovedIA parte de lo contrario: **traer solo lo que el caso pide, en el momento en que lo pide**. Cargar de más no es solo trabajo desperdiciado — condiciona y ensucia la respuesta.
+
+Para lograrlo, la bóveda se recorre por niveles (la **pirámide**):
+
+1. **El router (`Inicio`).** La única nota que se lee siempre, al empezar cada conversación. No contiene el trabajo: contiene el criterio para decidir **qué cargar y cuándo**. Si la señal es clara, la IA actúa; si no, pregunta.
+2. **Las portadas de rama.** Cada gran área (proyectos, clientes, infraestructura…) tiene una portada que el router carga solo cuando el tema entra por ahí.
+3. **Las notas.** El contenido real, al que se llega desde su portada o por búsqueda.
+
+Y una capa aparte, el **alma**: la carpeta donde se vuelca lo que uno piensa y siente — el porqué de fondo, la mentalidad, la manera de mirar el trabajo. No es documentación: es lo que hace que la memoria deje de ser un archivador y empiece a ser **continuidad**.
 
 ---
 
-## Estructura del proyecto / Project structure
+## Por qué así
 
-```
-simple-memory-claude/
-├── server/
-│   ├── index.js          ← MCP server (the only file that runs)
-│   └── package.json
-├── vault-example/        ← ready-to-use example vault
-│   ├── HOME.md           ← start here — customize with your info
-│   ├── clientes/         ← client profiles and context
-│   ├── stack/            ← tools and services you use
-│   ├── referencias/      ← technical guides and references
-│   ├── proyectos/        ← your projects
-│   └── problemas-resueltos/ ← solved problems worth remembering
-└── docs/
-    ├── mac-icloud.md     ← installation guide for Mac + iCloud
-    ├── windows.md        ← installation guide for Windows
-    ├── linux.md          ← installation guide for Linux
-    └── tools-reference.md ← complete reference for all 9 tools
-```
+- **Simple:** un solo archivo de servidor (`index.js`), una sola dependencia.
+- **Tuyo:** las notas son archivos `.md` en tu disco — sin bases de datos, sin APIs externas.
+- **Portátil:** funciona con iCloud, OneDrive, Google Drive, Dropbox o cualquier carpeta local.
+- **Transparente:** abres y editas tus notas en cualquier editor de texto.
 
 ---
 
-## Instalación rápida / Quick start
+## La estructura de la bóveda: para qué sirve cada carpeta
 
-### Requisitos / Requirements
+El `vault-example/` trae una estructura de referencia lista para usar. No es una jaula: crea las categorías que tu trabajo pida. Pero enseña el método completo.
 
-- Node.js 18 or later
+| Carpeta / archivo | Para qué sirve |
+|---|---|
+| `Inicio.md` | **El router.** Primera nota que se lee en cada sesión: decide qué cargar y cuándo. No carga a ciegas. |
+| `HOME.md` | **El mapa.** Qué carpeta es qué y dónde va cada cosa. |
+| `una-tarea-pendiente.md` | Ejemplo de **pendiente** sin fecha, en la raíz, marcado con `#pendiente`. |
+| `programado/` | Notas con **fecha** de activación (`> APARECER: AAAA-MM-DD`). El router avisa cuando llega el día. |
+| `sistema/` | Cómo funciona todo: la pirámide (regla madre), las portadas de rama y los protocolos de sesión. |
+| `alma/` | Filosofía y mentalidad; **dónde se vuelca lo que uno piensa y siente**. Fondo, no operativa. |
+| `proyectos/` | Tus proyectos propios. |
+| `clientes/` | Una subcarpeta por cliente, con su perfil y contexto. |
+| `conocimiento/` | Saber de oficio reutilizable, incluidos los `problemas-resueltos/`. |
+| `referencias/` | Guías, técnicas y recursos que se consultan pero no cambian a menudo. |
+
+---
+
+## Instalación
+
+### Requisitos
+
+- Node.js 18 o superior
 - Claude Code (`npm install -g @anthropic-ai/claude-code`)
-- A cloud sync folder (iCloud, OneDrive, Google Drive, Dropbox) — or any local folder
+- Una carpeta sincronizada en la nube (iCloud, OneDrive, Google Drive, Dropbox) — o cualquier carpeta local
 
-### 1. Clonar el repositorio / Clone the repository
+### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/jmpdsevilla/simple-memory-claude.git
-cd simple-memory-claude/server
+git clone https://github.com/jmpdsevilla/BovedIA.git
+cd BovedIA/server
 npm install
 ```
 
-### 2. Crear tu bóveda / Create your vault
+### 2. Crear tu bóveda
 
-Copy the example vault to your cloud folder and customize `HOME.md`:
+Copia la bóveda de ejemplo a tu carpeta sincronizada y personaliza `HOME.md` e `Inicio.md`:
 
-**Mac + iCloud:**
 ```bash
-cp -r vault-example ~/Library/Mobile\ Documents/com~apple~CloudDocs/my-memory
+# Mac + iCloud
+cp -r vault-example ~/Library/Mobile\ Documents/com~apple~CloudDocs/mi-boveda
+
+# Windows + OneDrive (PowerShell)
+xcopy /E /I vault-example "%USERPROFILE%\OneDrive\mi-boveda"
+
+# Linux + Dropbox
+cp -r vault-example ~/Dropbox/mi-boveda
 ```
 
-**Windows + OneDrive:**
-```powershell
-xcopy /E /I vault-example "%USERPROFILE%\OneDrive\my-memory"
-```
+### 3. Configurar Claude Code
 
-**Linux + Dropbox:**
-```bash
-cp -r vault-example ~/Dropbox/my-memory
-```
-
-### 3. Configurar Claude Code / Configure Claude Code
-
-**Mac + iCloud** (no env var needed — works out of the box):
+Apunta el servidor a tu bóveda con la variable `KB_MEMORY_ROOT` (acepta rutas con `~`):
 
 ```json
 {
   "mcpServers": {
-    "simple-memory": {
+    "bovedia": {
       "command": "node",
-      "args": ["/absolute/path/to/simple-memory-claude/server/index.js"]
-    }
-  }
-}
-```
-
-**Windows / Linux / custom path:**
-
-```json
-{
-  "mcpServers": {
-    "simple-memory": {
-      "command": "node",
-      "args": ["/absolute/path/to/simple-memory-claude/server/index.js"],
+      "args": ["/ruta/absoluta/a/BovedIA/server/index.js"],
       "env": {
-        "MEMORY_PATH": "/absolute/path/to/your/vault"
+        "KB_MEMORY_ROOT": "/ruta/absoluta/a/tu/mi-boveda"
       }
     }
   }
 }
 ```
 
-### 4. Verificar / Verify
+Si no defines `KB_MEMORY_ROOT` (ni su alias `MEMORY_PATH`), BovedIA usa `~/Documents/bovedia` por defecto.
 
-Restart Claude Code and ask Claude to run `get_index`. You should see your vault index.
+### 4. Verificar
+
+Reinicia Claude Code y pide leer `Inicio`, o ejecutar `get_index`. Deberías ver tu bóveda.
 
 ---
 
-## Authorship tracking (optional)
+## Anotaciones de autoría (opcional)
 
-**[ES]** El MCP soporta opcionalmente [Markdown Annotations](https://github.com/iainc/Markdown-Annotations), una spec abierta originalmente de iA Writer que permite registrar **qué autor escribió qué parte de cada nota**. Cuando se activa, las notas escritas por Claude llevan al final un bloque que atribuye el cuerpo a `&Claude`; cuando un humano edita la nota en iA Writer, sus rangos quedan marcados como `@nombre`, y la siguiente vez que el MCP toque la nota preserva esa autoría sin sobrescribirla.
+BovedIA soporta opcionalmente [Markdown Annotations](https://github.com/iainc/Markdown-Annotations), una spec abierta originalmente de iA Writer que registra **qué autor escribió qué parte de cada nota**. Cuando se activa, las notas escritas por la IA llevan al final un bloque que atribuye el cuerpo a `&Claude`; cuando un humano edita la nota en un editor compatible, sus rangos quedan marcados como `@nombre`, y la siguiente vez que BovedIA toque la nota preserva esa autoría en vez de sobrescribirla.
 
-**[EN]** The MCP optionally supports [Markdown Annotations](https://github.com/iainc/Markdown-Annotations), an open spec originally from iA Writer that records **which author wrote which part of each note**. When enabled, notes written by Claude carry a block at the end attributing the body to `&Claude`; when a human edits the note in iA Writer, their ranges are marked as `@name`, and the next time the MCP touches the note their authorship is preserved instead of overwritten.
-
-**How to enable / Cómo activarlo:**
-
-Add `KB_ENABLE_ANNOTATIONS=1` to the MCP environment:
+**Está desactivado por defecto.** Para activarlo, añade `KB_ENABLE_ANNOTATIONS=1` al entorno del servidor:
 
 ```json
 {
   "mcpServers": {
-    "simple-memory": {
+    "bovedia": {
       "command": "node",
-      "args": ["/absolute/path/to/simple-memory-claude/server/index.js"],
+      "args": ["/ruta/absoluta/a/BovedIA/server/index.js"],
       "env": {
+        "KB_MEMORY_ROOT": "/ruta/absoluta/a/tu/mi-boveda",
         "KB_ENABLE_ANNOTATIONS": "1"
       }
     }
@@ -176,137 +136,115 @@ Add `KB_ENABLE_ANNOTATIONS=1` to the MCP environment:
 }
 ```
 
-**Two extra tools become available / Dos herramientas adicionales:**
+Con la opción activa se desbloquean dos herramientas: `read_authorship` (resumen de quién escribió qué) y `migrate_annotations` (añade el bloque a todas las notas existentes; ejecútala con `dry_run: true` primero). La firma se puede personalizar con `KB_AUTHOR_NAME` y `KB_AUTHOR_EMAIL`.
 
-- `read_authorship(name)` — compact summary of who wrote which ranges.
-- `migrate_annotations({ dry_run })` — one-shot tool to add the block to all existing notes (preserves the original `updated` field). Run with `dry_run: true` first to audit.
-
-**Author name / Nombre del autor:**
-
-By default annotations are signed as `Claude` (`noreply@anthropic.com`). Override the signature with `KB_AUTHOR_NAME` and `KB_AUTHOR_EMAIL` so each server instance signs with its own identity (useful when several assistants share one vault).
-Por defecto las anotaciones se firman como `Claude` (`noreply@anthropic.com`). Cambia la firma con `KB_AUTHOR_NAME` y `KB_AUTHOR_EMAIL` para que cada instancia del servidor firme con su propia identidad (útil cuando varios asistentes comparten una misma bóveda).
-
-**Important / Importante:**
-
-- **Disabled by default.** Without `KB_ENABLE_ANNOTATIONS=1` the MCP behaves identically to v1.2.0: no annotation block at the end of files.
-- Editors that don't support the spec render the block as plain text at the end of the file. Only enable if you use iA Writer or another compatible editor.
+Solo actívalo si usas un editor compatible con la spec: los que no la soportan mostrarán el bloque como texto plano al final del archivo.
 
 ---
 
-## Estructura recomendada de la bóveda / Recommended vault structure
+## Las herramientas
 
-```
-my-memory/
-├── HOME.md                         ← read at the start of every session
-├── clients/
-│   └── client-name/
-│       └── profile.md
-├── stack/                          ← tools, APIs, credentials
-├── projects/                       ← your own projects
-├── references/                     ← guides, patterns, resources
-├── infrastructure/                 ← servers, DNS, deployments
-└── solved-problems/
-    └── area/
-        └── solution.md
-```
+29 en total. Las 27 primeras funcionan siempre. Las 2 de autoría (`read_authorship`, `migrate_annotations`) también aparecen en la lista, pero solo operan si arrancas el servidor con `KB_ENABLE_ANNOTATIONS=1`; sin ese flag avisan de que están desactivadas.
 
-The folder structure is flexible — create the categories that make sense for your work.
+### Lectura y escritura base
+
+| Herramienta | Qué hace |
+|---|---|
+| `write_note` | Crear o actualizar una nota (upsert completo) |
+| `read_note` | Leer una nota (busca en todas las categorías) |
+| `search_notes` | Buscar por texto libre (lógica AND) |
+| `list_notes` | Listar notas, filtradas por categoría o tag |
+| `get_index` | Índice completo de la bóveda con backlinks |
+| `delete_note` | Eliminar una nota (avisa de backlinks) |
+| `create_category` | Crear una carpeta |
+| `move_note` | Mover/renombrar una nota (actualiza wikilinks) |
+| `delete_category` | Eliminar una carpeta vacía |
+
+### Edición dirigida
+
+| Herramienta | Qué hace |
+|---|---|
+| `edit_note` | Buscar/reemplazar dentro de una nota |
+| `append_to_note` | Añadir contenido al final |
+| `prepend_to_note` | Insertar contenido al principio |
+| `update_section` | Reemplazar una sección por su encabezado |
+| `insert_after_section` | Insertar una sección nueva tras otra |
+
+### Mantenimiento de wikilinks y tags
+
+| Herramienta | Qué hace |
+|---|---|
+| `list_broken_links` | Todos los wikilinks rotos de la bóveda |
+| `find_backlinks` | Backlinks de una nota (sin cargar su contenido) |
+| `find_orphans` | Notas sin backlinks ni enlaces salientes |
+| `rename_wikilink` | Sustituir `[[viejo]]` por `[[nuevo]]` en toda la bóveda |
+| `list_tags` | Todos los hashtags `#snake_case` con su recuento |
+| `update_frontmatter` | Actualizar campos YAML sin tocar el cuerpo |
+
+### Lecturas baratas
+
+| Herramienta | Qué hace |
+|---|---|
+| `peek_note` | Frontmatter + primer párrafo |
+| `read_section` | Solo una sección |
+| `read_frontmatter` | Solo el YAML |
+
+### Mantenimiento de la bóveda
+
+| Herramienta | Qué hace |
+|---|---|
+| `recently_updated` | Notas modificadas en los últimos N días |
+| `move_category` | Renombrar una carpeta (actualiza el frontmatter de cada nota) |
+| `validate_note` | Revisar frontmatter, hashtags, "Ver también" y enlaces rotos |
+| `bulk_move` | Mover varias notas a la misma categoría |
+
+### Autoría (con `KB_ENABLE_ANNOTATIONS=1`)
+
+| Herramienta | Qué hace |
+|---|---|
+| `read_authorship` | Resumen de qué autor escribió qué rangos |
+| `migrate_annotations` | Añadir el bloque de autoría a las notas existentes |
+
+Referencia completa en [docs/tools-reference.md](docs/tools-reference.md).
 
 ---
 
-## Las herramientas / The tools
+## Protocolo de uso
 
-(29 tools in total — 27 always available + 2 unlocked by `KB_ENABLE_ANNOTATIONS=1`)
-
-
-### Base CRUD (9)
-
-| Tool | What it does |
-|---|---|
-| `write_note` | Create or update a note (full upsert) |
-| `read_note` | Read a note (searches all categories) |
-| `search_notes` | Search by free text (AND logic) |
-| `list_notes` | List notes, filtered by category or tag |
-| `get_index` | Full vault index with backlinks |
-| `delete_note` | Delete a note (warns about backlinks) |
-| `create_category` | Create a new folder |
-| `move_note` | Move/rename a note (auto-updates wikilinks) |
-| `delete_category` | Delete an empty folder |
-
-### Targeted editing (5)
-
-| Tool | What it does |
-|---|---|
-| `edit_note` | find/replace inside a note (fails on ambiguity unless `replace_all`) |
-| `append_to_note` | Append content at the end (before trailing hashtags) |
-| `prepend_to_note` | Insert content at the beginning (after h1) |
-| `update_section` | Replace a markdown section by its heading |
-| `insert_after_section` | Insert a new section right after another |
-
-### Wikilink and tag maintenance (6)
-
-| Tool | What it does |
-|---|---|
-| `list_broken_links` | All broken wikilinks in the vault |
-| `find_backlinks` | Backlinks of a note (without loading content) |
-| `find_orphans` | Notes with no backlinks and no outlinks |
-| `rename_wikilink` | Globally substitute `[[old]]` with `[[new]]` |
-| `list_tags` | All `#snake_case` hashtags with usage counts |
-| `update_frontmatter` | Update YAML fields without touching the body |
-
-### Cheap reads (3)
-
-| Tool | What it does |
-|---|---|
-| `peek_note` | Frontmatter + first paragraph |
-| `read_section` | Just one markdown section |
-| `read_frontmatter` | Just the YAML |
-
-### Vault maintenance (4)
-
-| Tool | What it does |
-|---|---|
-| `recently_updated` | Notes modified in the last N days |
-| `move_category` | Rename a folder, updates each note frontmatter |
-| `validate_note` | Check frontmatter, hashtags, See also, broken links |
-| `bulk_move` | Move several notes to the same category |
-
-See [docs/tools-reference.md](docs/tools-reference.md) for the full reference.
-
----
-
-## Protocolo de uso / Usage protocol
-
-Add this instruction to your Claude Code settings or CLAUDE.md to get the most out of the system:
+Añade esta instrucción a tu `CLAUDE.md` o a la configuración del asistente para sacarle todo el partido:
 
 ```
-At the start of each session: read_note("HOME"), then get_index if needed.
-Save automatically: credentials, solutions, configurations, commands worth remembering.
-Use [[slug]] wikilinks between notes.
-Every note should end with a "See also" section with 2–5 wikilinks.
+Al empezar cada sesión: leer Inicio (el router). Revisar la carpeta programado/
+y avisar de lo que ya toca. No cargar nada más "por si acaso".
+Guardar lo que merezca recordarse: credenciales, soluciones, decisiones, comandos.
+Enlazar las notas con wikilinks [[slug]]. Cada nota termina con una sección
+"Ver también" con 2-5 wikilinks.
 ```
 
 ---
 
 ## Wikilinks
 
-Notes link to each other using the `[[slug]]` format:
+Las notas se enlazan entre sí con el formato `[[slug]]`:
 
 ```markdown
-## See also
+## Ver también
 
-- [[supabase]] — database used in this project
-- [[acme-corp]] — client this belongs to
+- [[proyecto-ejemplo]] — proyecto donde se usa esto
+- [[cliente-ejemplo]] — cliente al que pertenece
 ```
 
-Rules:
-- Use the filename slug (kebab-case, no `.md`)
-- No paths: ~~`[[stack/supabase]]`~~ → `[[supabase]]`
-- No aliases: ~~`[[supabase|Database Config]]`~~ → `[[supabase]]`
+Reglas:
+
+- Usa el slug del nombre de archivo (kebab-case, sin `.md`).
+- Sin rutas: ~~`[[referencias/x]]`~~ → `[[x]]`.
+- Sin alias: ~~`[[x|otro texto]]`~~ → `[[x]]`.
+
+Cuando una nota se renombra, sus wikilinks se actualizan automáticamente.
 
 ---
 
-## Guías de instalación detalladas / Detailed installation guides
+## Guías de instalación detalladas
 
 - [Mac + iCloud Drive](docs/mac-icloud.md)
 - [Windows + OneDrive / Google Drive](docs/windows.md)
@@ -314,24 +252,15 @@ Rules:
 
 ---
 
-## Autor / Author
+## Autor
 
-Creado por **José Manuel Pérez**, fundador de [santa marta crea](https://santamartacrea.com) — Agencia Creativa Digital. Santa Marta, Colombia.
-
-Created by **José Manuel Pérez**, founder of [santa marta crea](https://santamartacrea.com) — Creative Digital Agency. Santa Marta, Colombia.
+Creado por **José Manuel Pérez**, fundador de [santa marta crea](https://santamartacrea.com) — agencia digital. Santa Marta, Colombia.
 
 - Web: [santamartacrea.com](https://santamartacrea.com)
 - GitHub: [@jmpdsevilla](https://github.com/jmpdsevilla)
 
 ---
 
-## Historial de cambios / Changelog
+## Licencia
 
-Ver [CHANGELOG.md](CHANGELOG.md) para el historial completo de versiones.
-See [CHANGELOG.md](CHANGELOG.md) for the full version history.
-
----
-
-## Licencia / License
-
-[MIT](LICENSE) — free to use, modify and distribute.
+[MIT](LICENSE) — libre para usar, modificar y distribuir.
