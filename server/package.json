@@ -1,9 +1,17 @@
 {
   "name": "bovedia",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "BovedIA — sistema de memoria personal para Claude Code: notas Markdown en tu disco, sincronizadas en la nube",
+  "mcpName": "io.github.jmpdsevilla/bovedia",
   "main": "index.js",
   "type": "module",
+  "bin": {
+    "bovedia": "index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
   "scripts": {
     "start": "node index.js"
   },
@@ -11,6 +19,7 @@
     "claude",
     "claude-code",
     "mcp",
+    "model-context-protocol",
     "memory",
     "knowledge-base",
     "markdown",
@@ -19,6 +28,14 @@
   ],
   "author": "José Manuel Pérez <https://santamartacrea.com>",
   "license": "MIT",
+  "homepage": "https://github.com/jmpdsevilla/BovedIA",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jmpdsevilla/BovedIA.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jmpdsevilla/BovedIA/issues"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
   }

@@ -60,6 +60,24 @@ El `vault-example/` trae una estructura de referencia lista para usar. No es una
 
 ## Instalación
 
+### Opción rápida: npx
+
+No necesitas clonar nada. Añade esto a la configuración MCP de tu cliente (Claude Code, Claude Desktop…) y copia el `vault-example/` a tu carpeta como punto de partida:
+
+```json
+{
+  "mcpServers": {
+    "bovedia": {
+      "command": "npx",
+      "args": ["-y", "bovedia"],
+      "env": { "KB_MEMORY_ROOT": "/ruta/absoluta/a/tu/boveda" }
+    }
+  }
+}
+```
+
+El resto de esta sección es la instalación manual (clonando el repo), útil si quieres modificar el código.
+
 ### Requisitos
 
 - Node.js 18 o superior

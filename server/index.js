@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -758,7 +759,7 @@ const server = new Server(
   // Nombre con el que el servidor se anuncia. Por defecto 'bovedia'; se puede
   // fijar con KB_SERVER_NAME para conservar un identificador propio en una
   // instalación ya existente sin cambiar nada del flujo de trabajo diario.
-  { name: process.env.KB_SERVER_NAME || 'bovedia', version: '2.0.0' },
+  { name: process.env.KB_SERVER_NAME || 'bovedia', version: '2.1.0' },
   { capabilities: { tools: {} } }
 );
 

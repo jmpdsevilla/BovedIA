@@ -8,6 +8,14 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/) y el versionado
 
 ---
 
+## [2.1.0] — 2026-07-21
+
+### Añadido
+
+**Publicación en npm.** BovedIA se puede instalar ahora directamente con `npx bovedia`, sin clonar el repositorio. Se añadió el shebang y el campo `bin` al paquete, más los metadatos para el registro oficial de MCP (`mcpName: io.github.jmpdsevilla/bovedia`). La configuración del cliente MCP pasa a ser tan simple como `"command": "npx", "args": ["-y", "bovedia"]`. El comportamiento del motor no cambia.
+
+---
+
 ## [2.0.0] — 2026-07-20
 
 ### Cambiado
@@ -325,6 +333,7 @@ No other behavioral changes. All 9 tools still accept the same parameters and re
 - 8 MCP tools operational.
 - Vault configuration via the `MEMORY_PATH` environment variable.
 
+[2.1.0]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v2.1.0
 [2.0.0]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v2.0.0
 [1.2.0]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.2.0
 [1.1.4]: https://github.com/jmpdsevilla/BovedIA/releases/tag/v1.1.4

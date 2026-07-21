@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.jmpdsevilla/bovedia",
+  "description": "Sistema de memoria personal para Claude Code: notas Markdown en tu disco, sincronizadas en la nube. No carga el contexto a ciegas y tiene una capa para lo que uno piensa y siente.",
+  "version": "2.1.0",
+  "repository": {
+    "url": "https://github.com/jmpdsevilla/BovedIA",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registry_type": "npm",
+      "identifier": "bovedia",
+      "version": "2.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environment_variables": [
+        {
+          "name": "KB_MEMORY_ROOT",
+          "description": "Ruta de la carpeta de tu bóveda. Si no se define, usa ~/Documents/bovedia.",
+          "is_required": false,
+          "is_secret": false
+        },
+        {
+          "name": "KB_ENABLE_ANNOTATIONS",
+          "description": "Pon a 1 para activar Markdown Annotations (autoría por rangos). Por defecto desactivado.",
+          "is_required": false,
+          "is_secret": false
+        }
+      ]
+    }
+  ]
+}
